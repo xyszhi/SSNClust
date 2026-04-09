@@ -1,0 +1,8 @@
+python-igraph
+leidenalg
+markov-clustering
+scikit-learn
+pandas
+numpy
+networkx
+graph-tool
