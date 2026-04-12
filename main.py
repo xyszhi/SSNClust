@@ -48,7 +48,15 @@ def main():
         print(f"  密度: {stats['density']:.6f}")
         print(f"  是否连通: {'是' if stats['is_connected'] else '否'}")
         print(f"  连通分量数: {stats['components']}")
+        print(f"  最大连通分量 (LCC) 节点数: {stats['lcc_size']} ({stats['lcc_percentage']:.2f}%)")
+        print(f"  平均度 (Average Degree): {stats['avg_degree']:.2f}")
+        print(f"  最大/最小度: {stats['max_degree']} / {stats['min_degree']}")
         print(f"  平均局部聚集系数: {stats['avg_clustering']:.6f}")
+        if 'total_weight' in stats:
+            print(f"权重统计 ({analyzer.active_weight}):")
+            print(f"  总权重: {stats['total_weight']:.2f}")
+            print(f"  平均权重: {stats['avg_weight']:.4f}")
+            print(f"  最大权重: {stats['max_weight']:.4f}")
     
     if args.output:
         generator.save(args.output)

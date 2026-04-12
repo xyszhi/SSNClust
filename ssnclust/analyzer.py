@@ -12,7 +12,7 @@ class SSNAnalyzer:
 
     def basic_stats(self) -> Dict[str, Any]:
         """
-        计算基础统计指标。
+        计算基础统计指标，并包含更丰富的网络特征。
         """
         if self.graph.vcount() == 0:
             return {
@@ -21,17 +21,43 @@ class SSNAnalyzer:
                 "density": 0.0,
                 "is_connected": False,
                 "components": 0,
-                "avg_clustering": 0.0
+                "avg_clustering": 0.0,
+                "avg_degree": 0.0,
+                "max_degree": 0,
+                "min_degree": 0,
+                "lcc_size": 0,
+                "lcc_percentage": 0.0,
+                "total_weight": 0.0
             }
             
-        return {
+        components = self.graph.connected_components()
+        lcc = components.giant()
+        lcc_size = lcc.vcount()
+        
+        degrees = self.graph.degree()
+        
+        stats = {
             "nodes": self.graph.vcount(),
             "edges": self.graph.ecount(),
             "density": self.graph.density(),
             "is_connected": self.graph.is_connected(),
-            "components": len(self.graph.connected_components()),
-            "avg_clustering": self.graph.transitivity_avglocal_undirected(mode="zero")
+            "components": len(components),
+            "avg_clustering": self.graph.transitivity_avglocal_undirected(mode="zero"),
+            "avg_degree": sum(degrees) / len(degrees) if degrees else 0,
+            "max_degree": max(degrees) if degrees else 0,
+            "min_degree": min(degrees) if degrees else 0,
+            "lcc_size": lcc_size,
+            "lcc_percentage": (lcc_size / self.graph.vcount()) * 100 if self.graph.vcount() > 0 else 0
         }
+
+        # 添加权重相关的统计
+        if self.active_weight and self.active_weight in self.graph.edge_attributes():
+            weights = self.graph.es[self.active_weight]
+            stats["total_weight"] = sum(weights)
+            stats["avg_weight"] = sum(weights) / len(weights) if weights else 0
+            stats["max_weight"] = max(weights) if weights else 0
+        
+        return stats
 
     def get_connected_components(self) -> ig.VertexClustering:
         """
