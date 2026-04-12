@@ -1,5 +1,6 @@
 import argparse
 from ssnclust.generator import SSNGenerator
+from ssnclust.analyzer import SSNAnalyzer
 
 def main():
     parser = argparse.ArgumentParser(description="SSNClust: 基于序列相似性网络 (SSN) 的序列聚类工具")
@@ -11,6 +12,8 @@ def main():
     parser.add_argument("--cov-mode", choices=['min', 'max', 'any'], default='min', help="Coverage 过滤模式 (默认: min)")
     parser.add_argument("--weight", choices=['evalue', 'fident', 'bits', 'none'], default='evalue', help="权重计算依据 (默认: evalue)")
     parser.add_argument("--output", "-o", help="输出图文件路径 (推荐扩展名: .graphml)")
+    parser.add_argument("--stats", action="store_true", help="显示网络基础统计信息")
+    parser.add_argument("--jaccard", action="store_true", help="对边权重应用 Jaccard 加权")
     
     args = parser.parse_args()
     
@@ -28,8 +31,24 @@ def main():
     )
     
     print(f"SSN 构建完成:")
-    print(f"  节点数: {graph.vcount()}")
-    print(f"  边数: {graph.ecount()}")
+    
+    analyzer = SSNAnalyzer(graph)
+    
+    if args.jaccard:
+        # 如果指定了 --jaccard，应用 Jaccard 加权
+        # 默认使用 generate 阶段生成的 'weight' 作为基础
+        analyzer.apply_jaccard_weighting(base_weight='weight' if weight_by else 'none')
+        
+    stats = analyzer.basic_stats()
+    print(f"  节点数: {stats['nodes']}")
+    print(f"  边数: {stats['edges']}")
+    
+    if args.stats:
+        print(f"网络统计信息:")
+        print(f"  密度: {stats['density']:.6f}")
+        print(f"  是否连通: {'是' if stats['is_connected'] else '否'}")
+        print(f"  连通分量数: {stats['components']}")
+        print(f"  平均局部聚集系数: {stats['avg_clustering']:.6f}")
     
     if args.output:
         generator.save(args.output)
