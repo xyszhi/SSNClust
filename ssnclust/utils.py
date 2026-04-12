@@ -4,7 +4,7 @@ from typing import Iterator, Dict, Any
 def parse_m8_tsv(file_path: str) -> Iterator[Dict[str, Any]]:
     """
     解析 mmseqs2/blast m8 (outfmt 6) 格式的 TSV 文件。
-    假设第一行是标题行（如 examples/cluster_999_3.tsv 所示）。
+    假设第一行是标题行（如 examples/cluster_999.tsv 所示）。
     """
     with open(file_path, 'r') as f:
         reader = csv.DictReader(f, delimiter='\t')

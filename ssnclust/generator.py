@@ -16,6 +16,8 @@ class SSNGenerator:
                  evalue_threshold: float = 1e-5, 
                  identity_threshold: float = 0.0,
                  alnlen_threshold: int = 0,
+                 coverage_threshold: float = 0.0,
+                 coverage_mode: str = 'min',
                  weight_by: Optional[str] = 'evalue',
                  **extra_filters: Any) -> ig.Graph:
         """
@@ -24,6 +26,11 @@ class SSNGenerator:
         :param evalue_threshold: E-value 阈值，E-value <= 该值则保留。
         :param identity_threshold: Identity 阈值 (0-1)，fident >= 该值则保留。
         :param alnlen_threshold: 比对长度阈值，alnlen >= 该值则保留。
+        :param coverage_threshold: Coverage 阈值 (0-1)。
+        :param coverage_mode: Coverage 过滤模式: 
+                              'min': qcov 和 tcov 都需 >= 阈值 (等同于 both)
+                              'max': qcov 或 tcov 有一者 >= 阈值 (等同于 any)
+                              'any': 同 max
         :param weight_by: 权重基于哪个指标。'evalue' (计算 -log10), 'fident', 'bits' 或任何数值列名。
         :param extra_filters: 额外的过滤条件 (列名=阈值)，默认执行 '列值 >= 阈值'。
         """
@@ -48,6 +55,19 @@ class SSNGenerator:
             if 'alnlen' in row and row['alnlen'] < alnlen_threshold:
                 continue
             
+            # Coverage 过滤
+            qcov = row.get('qcov', 0.0)
+            tcov = row.get('tcov', 0.0)
+            if coverage_mode == 'min':
+                if qcov < coverage_threshold or tcov < coverage_threshold:
+                    continue
+            elif coverage_mode in ('max', 'any'):
+                if qcov < coverage_threshold and tcov < coverage_threshold:
+                    continue
+            
+            nodes.add(query)
+            nodes.add(target)
+
             # 额外的自定义过滤
             skip = False
             for col, threshold in extra_filters.items():
@@ -61,9 +81,6 @@ class SSNGenerator:
                         break
             if skip:
                 continue
-
-            nodes.add(query)
-            nodes.add(target)
 
             edges.append((query, target))
             
