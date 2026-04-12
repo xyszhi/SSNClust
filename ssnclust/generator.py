@@ -12,6 +12,19 @@ class SSNGenerator:
         self.file_path = file_path
         self.graph = ig.Graph(directed=False)
 
+    def save(self, output_path: str):
+        """
+        将生成的图保存到文件。支持格式：.graphml, .gexf, .gt, .pajek 等。
+        建议使用 .graphml 以获得最佳的 Gephi 兼容性。
+        """
+        if self.graph.vcount() == 0:
+            print("警告: 图为空，未保存。")
+            return
+            
+        # 根据后缀自动识别格式
+        self.graph.write(output_path)
+        print(f"SSN 已保存至: {output_path}")
+
     def generate(self, 
                  evalue_threshold: float = 1e-5, 
                  identity_threshold: float = 0.0,
