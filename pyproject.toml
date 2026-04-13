@@ -7,6 +7,7 @@ requires-python = ">=3.13"
 dependencies = [
     "igraph>=1.0.0",
     "leidenalg>=0.11.0",
+    "markov-clustering>=0.0.6.dev0",
     "scikit-learn>=1.8.0",
     "scikit-network>=0.33.5",
     "scipy>=1.17.1",
