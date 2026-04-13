@@ -4,6 +4,7 @@ from ssnclust.analyzer import SSNAnalyzer
 from ssnclust.clustering.leiden_alg import LeidenClustering
 from ssnclust.clustering.spectral import SSNSpectralClustering
 from ssnclust.clustering.mcl_wrapper import MCLClustering
+from ssnclust.clustering.nmf_clust import NMFClustering
 
 def main():
     parser = argparse.ArgumentParser(description="SSNClust: 基于序列相似性网络 (SSN) 的序列聚类工具")
@@ -17,7 +18,7 @@ def main():
     parser.add_argument("--output", "-o", help="输出图文件路径 (推荐扩展名: .graphml)")
     parser.add_argument("--stats", action="store_true", help="显示网络基础统计信息")
     parser.add_argument("--jaccard", action="store_true", help="对边权重应用 Jaccard 加权")
-    parser.add_argument("--cluster", choices=['leiden', 'spectral', 'mcl'], help="执行指定的聚类方法")
+    parser.add_argument("--cluster", choices=['leiden', 'spectral', 'mcl', 'nmf'], help="执行指定的聚类方法")
     parser.add_argument("--leiden-method", choices=['modularity', 'cpm', 'rb_config', 'rber', 'significance', 'surprise'], default='modularity', help="Leiden 聚类的具体方法 (默认: modularity)")
     parser.add_argument("--resolution", type=float, help="Leiden 聚类的分辨率参数")
     parser.add_argument("--mcl-inflation", type=float, default=2.0, help="MCL 聚类的膨胀系数 (默认: 2.0)")
@@ -102,6 +103,10 @@ def main():
         print(f"正在使用 MCL (inflation={args.mcl_inflation}) 进行聚类...")
         mcl_obj = MCLClustering(graph)
         clustering = mcl_obj.cluster(inflation=args.mcl_inflation, weights=analyzer.active_weight)
+    elif args.cluster == 'nmf':
+        print(f"正在使用 NMF (n_components={args.n_clusters}) 进行聚类...")
+        nmf_obj = NMFClustering(graph)
+        clustering = nmf_obj.cluster(n_components=args.n_clusters, weights=analyzer.active_weight)
 
     if args.cluster and clustering:
             graph.vs["cluster"] = clustering.membership
