@@ -2,6 +2,7 @@ import argparse
 from ssnclust.generator import SSNGenerator
 from ssnclust.analyzer import SSNAnalyzer
 from ssnclust.clustering.leiden_alg import LeidenClustering
+from ssnclust.clustering.spectral import SSNSpectralClustering
 
 def main():
     parser = argparse.ArgumentParser(description="SSNClust: 基于序列相似性网络 (SSN) 的序列聚类工具")
@@ -11,13 +12,14 @@ def main():
     parser.add_argument("--alnlen", type=int, default=0, help="比对长度阈值 (默认: 0)")
     parser.add_argument("--coverage", type=float, default=0.0, help="Coverage 阈值 (0.0-1.0, 默认: 0.0)")
     parser.add_argument("--cov-mode", choices=['min', 'max', 'any'], default='min', help="Coverage 过滤模式 (默认: min)")
-    parser.add_argument("--weight", choices=['evalue', 'fident', 'bits', 'none'], default='evalue', help="权重计算依据 (默认: evalue)")
+    parser.add_argument("--weight", choices=['fident', 'bits', 'evalue', 'none'], default='fident', help="权重计算依据 (默认: evalue)")
     parser.add_argument("--output", "-o", help="输出图文件路径 (推荐扩展名: .graphml)")
     parser.add_argument("--stats", action="store_true", help="显示网络基础统计信息")
     parser.add_argument("--jaccard", action="store_true", help="对边权重应用 Jaccard 加权")
-    parser.add_argument("--cluster", choices=['leiden'], help="执行指定的聚类方法")
+    parser.add_argument("--cluster", choices=['leiden', 'spectral'], help="执行指定的聚类方法")
     parser.add_argument("--leiden-method", choices=['modularity', 'cpm', 'rb'], default='modularity', help="Leiden 聚类的具体方法 (默认: modularity)")
     parser.add_argument("--resolution", type=float, help="Leiden 聚类的分辨率参数")
+    parser.add_argument("--n-clusters", type=int, default=8, help="聚类数量 (用于谱聚类等, 默认: 8)")
     
     args = parser.parse_args()
     
@@ -83,8 +85,12 @@ def main():
             clustering = lc.cluster_rb(resolution=res, weights=analyzer.active_weight)
         else:
             clustering = None
+    elif args.cluster == 'spectral':
+        print(f"正在使用 Spectral Clustering (n_clusters={args.n_clusters}) 进行聚类...")
+        sc = SSNSpectralClustering(graph)
+        clustering = sc.cluster(n_clusters=args.n_clusters, weights=analyzer.active_weight)
 
-        if clustering:
+    if args.cluster and clustering:
             graph.vs["cluster"] = clustering.membership
             print(f"聚类完成，共发现 {len(clustering)} 个社区。")
             # 如果有输出文件，重新保存一次以包含聚类结果
