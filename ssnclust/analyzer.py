@@ -1,4 +1,5 @@
 import igraph as ig
+import statistics
 from typing import Dict, Any, List, Optional
 
 class SSNAnalyzer:
@@ -55,7 +56,9 @@ class SSNAnalyzer:
             weights = self.graph.es[self.active_weight]
             stats["total_weight"] = sum(weights)
             stats["avg_weight"] = sum(weights) / len(weights) if weights else 0
+            stats["min_weight"] = min(weights) if weights else 0
             stats["max_weight"] = max(weights) if weights else 0
+            stats["sd_weight"] = statistics.stdev(weights) if weights else 0
         
         return stats
 

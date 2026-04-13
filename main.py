@@ -15,7 +15,7 @@ def main():
     parser.add_argument("--alnlen", type=int, default=0, help="比对长度阈值 (默认: 0)")
     parser.add_argument("--coverage", type=float, default=0.0, help="Coverage 阈值 (0.0-1.0, 默认: 0.0)")
     parser.add_argument("--cov-mode", choices=['min', 'max', 'any'], default='min', help="Coverage 过滤模式 (默认: min)")
-    parser.add_argument("--weight", choices=['fident', 'bits', 'evalue', 'none'], default='fident', help="权重计算依据 (默认: evalue)")
+    parser.add_argument("--weight", choices=['fident', 'bits', 'evalue', 'none'], default='fident', help="权重计算依据 (默认: fident)")
     parser.add_argument("--output", "-o", help="输出图文件路径 (推荐扩展名: .graphml)")
     parser.add_argument("--stats", action="store_true", help="显示网络基础统计信息")
     parser.add_argument("--jaccard", action="store_true", help="对边权重应用 Jaccard 加权")
@@ -68,7 +68,9 @@ def main():
             print(f"权重统计 ({analyzer.active_weight}):")
             print(f"  总权重: {stats['total_weight']:.2f}")
             print(f"  平均权重: {stats['avg_weight']:.4f}")
+            print(f"  最小权重: {stats['min_weight']:.4f}")
             print(f"  最大权重: {stats['max_weight']:.4f}")
+            print(f"  权重标准差: {stats['sd_weight']:.4f}")
     
     if args.output:
         generator.save(args.output)
