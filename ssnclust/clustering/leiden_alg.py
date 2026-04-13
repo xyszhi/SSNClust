@@ -45,6 +45,9 @@ class LeidenClustering:
             "Surprise": la.SurpriseVertexPartition,
         }
 
+        # 检查划分模型是否支持权重
+        no_weight_models = {la.SignificanceVertexPartition, la.SurpriseVertexPartition}
+
         if isinstance(partition_type, str):
             if partition_type not in pt_map:
                 raise ValueError(f"不支持的划分类型: {partition_type}。可选: {list(pt_map.keys())}")
@@ -54,13 +57,17 @@ class LeidenClustering:
 
         # 处理权重
         edge_weights = None
-        if isinstance(weights, str):
-            if weights in self.graph.edge_attributes():
-                edge_weights = self.graph.es[weights]
-            else:
-                raise ValueError(f"图中不存在边属性: {weights}")
-        elif isinstance(weights, (list, tuple)):
-            edge_weights = weights
+        if actual_partition_class not in no_weight_models:
+            if isinstance(weights, str):
+                if weights in self.graph.edge_attributes():
+                    edge_weights = self.graph.es[weights]
+                else:
+                    raise ValueError(f"图中不存在边属性: {weights}")
+            elif isinstance(weights, (list, tuple)):
+                edge_weights = weights
+        elif weights is not None:
+            # 如果提供了权重但模型不支持，发出警告或忽略（取决于策略，这里选择忽略权重）
+            pass
 
         # 执行聚类
         partition = la.find_partition(

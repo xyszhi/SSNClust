@@ -17,7 +17,7 @@ def main():
     parser.add_argument("--stats", action="store_true", help="显示网络基础统计信息")
     parser.add_argument("--jaccard", action="store_true", help="对边权重应用 Jaccard 加权")
     parser.add_argument("--cluster", choices=['leiden', 'spectral'], help="执行指定的聚类方法")
-    parser.add_argument("--leiden-method", choices=['modularity', 'cpm', 'rb'], default='modularity', help="Leiden 聚类的具体方法 (默认: modularity)")
+    parser.add_argument("--leiden-method", choices=['modularity', 'cpm', 'rb_config', 'rber', 'significance', 'surprise'], default='modularity', help="Leiden 聚类的具体方法 (默认: modularity)")
     parser.add_argument("--resolution", type=float, help="Leiden 聚类的分辨率参数")
     parser.add_argument("--n-clusters", type=int, default=8, help="聚类数量 (用于谱聚类等, 默认: 8)")
     
@@ -71,20 +71,27 @@ def main():
         print(f"正在使用 Leiden ({args.leiden_method}) 进行聚类...")
         lc = LeidenClustering(graph)
         
+        # 参数映射
+        leiden_method_map = {
+            'modularity': 'Modularity',
+            'cpm': 'CPM',
+            'rb_config': 'RBConfiguration',
+            'rber': 'RBER',
+            'significance': 'Significance',
+            'surprise': 'Surprise'
+        }
+        partition_type = leiden_method_map.get(args.leiden_method, 'Modularity')
+
         # 确定使用的分辨率参数
         res = args.resolution
-        if res is None:
-            # 提供默认分辨率
-            res = 0.01 if args.leiden_method == 'cpm' else 1.0
+        kwargs = {}
+        if partition_type in ['CPM', 'RBConfiguration', 'RBER']:
+            if res is None:
+                # 提供默认分辨率
+                res = 0.01 if partition_type == 'CPM' else 1.0
+            kwargs['resolution_parameter'] = res
             
-        if args.leiden_method == 'modularity':
-            clustering = lc.cluster_modularity(weights=analyzer.active_weight)
-        elif args.leiden_method == 'cpm':
-            clustering = lc.cluster_cpm(resolution=res, weights=analyzer.active_weight)
-        elif args.leiden_method == 'rb':
-            clustering = lc.cluster_rb(resolution=res, weights=analyzer.active_weight)
-        else:
-            clustering = None
+        clustering = lc.cluster(partition_type=partition_type, weights=analyzer.active_weight, **kwargs)
     elif args.cluster == 'spectral':
         print(f"正在使用 Spectral Clustering (n_clusters={args.n_clusters}) 进行聚类...")
         sc = SSNSpectralClustering(graph)
