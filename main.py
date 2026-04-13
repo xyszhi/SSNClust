@@ -1,6 +1,7 @@
 import argparse
 from ssnclust.generator import SSNGenerator
 from ssnclust.analyzer import SSNAnalyzer
+from ssnclust.clustering.leiden_alg import LeidenClustering
 
 def main():
     parser = argparse.ArgumentParser(description="SSNClust: 基于序列相似性网络 (SSN) 的序列聚类工具")
@@ -14,6 +15,9 @@ def main():
     parser.add_argument("--output", "-o", help="输出图文件路径 (推荐扩展名: .graphml)")
     parser.add_argument("--stats", action="store_true", help="显示网络基础统计信息")
     parser.add_argument("--jaccard", action="store_true", help="对边权重应用 Jaccard 加权")
+    parser.add_argument("--cluster", choices=['leiden'], help="执行指定的聚类方法")
+    parser.add_argument("--leiden-method", choices=['modularity', 'cpm', 'rb'], default='modularity', help="Leiden 聚类的具体方法 (默认: modularity)")
+    parser.add_argument("--resolution", type=float, help="Leiden 聚类的分辨率参数")
     
     args = parser.parse_args()
     
@@ -61,7 +65,31 @@ def main():
     if args.output:
         generator.save(args.output)
     
-    # 以后可以在这里添加分析或聚类逻辑
+    if args.cluster == 'leiden':
+        print(f"正在使用 Leiden ({args.leiden_method}) 进行聚类...")
+        lc = LeidenClustering(graph)
+        
+        # 确定使用的分辨率参数
+        res = args.resolution
+        if res is None:
+            # 提供默认分辨率
+            res = 0.01 if args.leiden_method == 'cpm' else 1.0
+            
+        if args.leiden_method == 'modularity':
+            clustering = lc.cluster_modularity(weights=analyzer.active_weight)
+        elif args.leiden_method == 'cpm':
+            clustering = lc.cluster_cpm(resolution=res, weights=analyzer.active_weight)
+        elif args.leiden_method == 'rb':
+            clustering = lc.cluster_rb(resolution=res, weights=analyzer.active_weight)
+        else:
+            clustering = None
+
+        if clustering:
+            graph.vs["cluster"] = clustering.membership
+            print(f"聚类完成，共发现 {len(clustering)} 个社区。")
+            # 如果有输出文件，重新保存一次以包含聚类结果
+            if args.output:
+                generator.save(args.output)
 
 if __name__ == "__main__":
     main()
