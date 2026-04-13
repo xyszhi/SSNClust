@@ -5,6 +5,7 @@ from ssnclust.clustering.leiden_alg import LeidenClustering
 from ssnclust.clustering.spectral import SSNSpectralClustering
 from ssnclust.clustering.mcl_wrapper import MCLClustering
 from ssnclust.clustering.nmf_clust import NMFClustering
+from ssnclust.clustering.sbm_model import SBMClustering
 
 def main():
     parser = argparse.ArgumentParser(description="SSNClust: 基于序列相似性网络 (SSN) 的序列聚类工具")
@@ -18,11 +19,13 @@ def main():
     parser.add_argument("--output", "-o", help="输出图文件路径 (推荐扩展名: .graphml)")
     parser.add_argument("--stats", action="store_true", help="显示网络基础统计信息")
     parser.add_argument("--jaccard", action="store_true", help="对边权重应用 Jaccard 加权")
-    parser.add_argument("--cluster", choices=['leiden', 'spectral', 'mcl', 'nmf'], help="执行指定的聚类方法")
+    parser.add_argument("--cluster", choices=['leiden', 'spectral', 'mcl', 'nmf', 'sbm'], help="执行指定的聚类方法")
     parser.add_argument("--leiden-method", choices=['modularity', 'cpm', 'rb_config', 'rber', 'significance', 'surprise'], default='modularity', help="Leiden 聚类的具体方法 (默认: modularity)")
     parser.add_argument("--resolution", type=float, help="Leiden 聚类的分辨率参数")
     parser.add_argument("--mcl-inflation", type=float, default=2.0, help="MCL 聚类的膨胀系数 (默认: 2.0)")
-    parser.add_argument("--n-clusters", type=int, default=8, help="聚类数量 (用于谱聚类等, 默认: 8)")
+    parser.add_argument("--sbm-type", choices=['standard', 'nested'], default='standard', help="SBM 模型类型: standard (标准), nested (层次/嵌套, 自动推断层级)")
+    parser.add_argument("--no-deg-corr", action="store_true", help="关闭 SBM 的度校正 (默认开启，建议开启以处理 SSN 中的高通量节点)")
+    parser.add_argument("--n-clusters", type=int, default=8, help="聚类数量 (用于谱聚类、NMF 等, 默认: 8)")
     
     args = parser.parse_args()
     
@@ -107,6 +110,16 @@ def main():
         print(f"正在使用 NMF (n_components={args.n_clusters}) 进行聚类...")
         nmf_obj = NMFClustering(graph)
         clustering = nmf_obj.cluster(n_components=args.n_clusters, weights=analyzer.active_weight)
+    elif args.cluster == 'sbm':
+        print(f"正在使用 SBM ({args.sbm_type}) 进行聚类...")
+        sbm_obj = SBMClustering(graph)
+        res = args.resolution if args.resolution is not None else 1.0
+        clustering = sbm_obj.cluster(
+            sbm_type=args.sbm_type,
+            degree_corrected=not args.no_deg_corr,
+            resolution=res,
+            weights=analyzer.active_weight
+        )
 
     if args.cluster and clustering:
             graph.vs["cluster"] = clustering.membership
