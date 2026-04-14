@@ -53,6 +53,9 @@ class NMFClustering:
         # 在社区检测中，通常 A ≈ W * W.T (对称分解)，或者直接对 A 进行标准分解。
         # 这里使用标准分解 A ≈ W * H，H 的列向量表示节点在各个组件（社区）上的权重。
         
+        # n_components 不能超过节点数，否则 NMF 会报错
+        n_components = min(n_components, self.graph.vcount())
+
         nmf_model = NMF(
             n_components=n_components,
             init=init,
@@ -63,7 +66,8 @@ class NMFClustering:
         
         # W 是节点对主题/社区的贡献，H 是主题对节点的贡献。
         # 在对称邻接矩阵中，W 和 H.T 应该是类似的。
-        W = nmf_model.fit_transform(adj)
+        # nndsvd 初始化不支持稀疏矩阵，统一转为密集矩阵
+        W = nmf_model.fit_transform(adj.toarray())
         
         # 3. 提取聚类结果：每个节点所属的社区为其在 W 中权重最大的索引
         membership = np.argmax(W, axis=1).tolist()

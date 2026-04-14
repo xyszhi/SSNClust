@@ -57,9 +57,17 @@ class MCLClustering:
         
         # 4. 转换为 igraph 的 membership 格式
         # mcl.get_clusters 返回的是 (node_idx, ...) 的元组列表
-        membership = [0] * self.graph.vcount()
+        # 用 -1 标记未分配节点，避免孤立节点被错误归入 cluster 0
+        membership = [-1] * self.graph.vcount()
         for cluster_id, nodes in enumerate(clusters):
             for node in nodes:
                 membership[node] = cluster_id
-                
+
+        # 将未被 MCL 覆盖的孤立节点各自单独成簇
+        next_id = len(clusters)
+        for i, m in enumerate(membership):
+            if m == -1:
+                membership[i] = next_id
+                next_id += 1
+
         return ig.VertexClustering(self.graph, membership=membership)

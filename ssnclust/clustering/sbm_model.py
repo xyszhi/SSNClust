@@ -62,16 +62,25 @@ class SBMClustering:
         """
         # 场景 A: 使用 graph-tool (推荐)
         if HAS_GRAPH_TOOL and use_gt:
+            # 同时支持字符串属性名和列表权重
             weight_attr = weights if isinstance(weights, str) else None
+            if isinstance(weights, (list, tuple)):
+                temp_attr = "_temp_sbm_weight"
+                self.graph.es[temp_attr] = weights
+                weight_attr = temp_attr
             g_gt, gt_weights = self._to_gt_graph(weight_attr)
-            
+            if isinstance(weights, (list, tuple)):
+                del self.graph.es[temp_attr]
+
+            # rec_types 指定边协变量类型，'real-exponential' 适合非负权重（如 fident、bits）
+            rec_types = ['real-exponential'] if gt_weights else []
+
             if sbm_type == 'nested':
                 # 嵌套 SBM (自动推断层级和聚类数)
-                # state_args 的 recs (real-valued edge covariates) 用于加权
                 state = gt.minimize_nested_blockmodel_dl(
-                    g_gt, 
+                    g_gt,
                     state_args=dict(recs=[gt_weights] if gt_weights else [],
-                                    rel_recs=[gt_weights] if gt_weights else [])
+                                    rec_types=rec_types)
                 )
                 # 获取最底层（最细颗粒度）的划分
                 levels = state.get_bs()
@@ -79,10 +88,10 @@ class SBMClustering:
             else:
                 # 标准 SBM (自动推断聚类数)
                 state = gt.minimize_blockmodel_dl(
-                    g_gt, 
+                    g_gt,
                     deg_corr=degree_corrected,
                     state_args=dict(recs=[gt_weights] if gt_weights else [],
-                                    rel_recs=[gt_weights] if gt_weights else [])
+                                    rec_types=rec_types)
                 )
                 membership = list(state.get_blocks())
                 

@@ -55,8 +55,10 @@ class SSNGenerator:
             query = row['query']
             target = row['target']
             
-            # 自环处理
+            # 自环处理：仅在通过 evalue 过滤后才将节点加入图
             if query == target:
+                if 'evalue' in row and row['evalue'] > evalue_threshold:
+                    continue
                 nodes.add(query)
                 continue
 
@@ -78,10 +80,7 @@ class SSNGenerator:
                 if qcov < coverage_threshold and tcov < coverage_threshold:
                     continue
             
-            nodes.add(query)
-            nodes.add(target)
-
-            # 额外的自定义过滤
+            # 额外的自定义过滤（在节点加入图之前执行，避免产生游离孤立节点）
             skip = False
             for col, threshold in extra_filters.items():
                 if col in row:
@@ -95,6 +94,8 @@ class SSNGenerator:
             if skip:
                 continue
 
+            nodes.add(query)
+            nodes.add(target)
             edges.append((query, target))
             
             # 收集该边的所有属性（除了 query 和 target）
@@ -117,6 +118,9 @@ class SSNGenerator:
         # 添加边属性
         for attr_name, values in edge_attrs.items():
             self.graph.es[attr_name] = values
+
+        # 去除重复边（如 BLAST/MMseqs2 双向比对产生的 A->B 和 B->A），对数值属性取均值
+        self.graph.simplify(multiple=True, loops=True, combine_edges='mean')
 
         # 计算权重 (如果指定了且在 edge_attrs 中)
         if weight_by:

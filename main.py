@@ -28,7 +28,9 @@ def main():
     parser.add_argument("--n-clusters", type=int, default=8, help="聚类数量 (用于谱聚类、NMF 等, 默认: 8)")
     
     args = parser.parse_args()
-    
+
+    clustering = None  # 防止 clustering 变量未定义导致 NameError
+
     print(f"正在从 {args.input} 生成 SSN...")
     generator = SSNGenerator(args.input)
     weight_by = args.weight if args.weight != 'none' else None

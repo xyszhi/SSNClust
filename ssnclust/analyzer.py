@@ -58,7 +58,7 @@ class SSNAnalyzer:
             stats["avg_weight"] = sum(weights) / len(weights) if weights else 0
             stats["min_weight"] = min(weights) if weights else 0
             stats["max_weight"] = max(weights) if weights else 0
-            stats["sd_weight"] = statistics.stdev(weights) if weights else 0
+            stats["sd_weight"] = statistics.stdev(weights) if len(weights) >= 2 else 0.0
         
         return stats
 
@@ -133,8 +133,9 @@ class SSNAnalyzer:
         
         for edge in self.graph.es:
             u, v = edge.tuple
-            neighbors_u = adj_list[u]
-            neighbors_v = adj_list[v]
+            # 排除端点自身，避免 Jaccard 系数偏高
+            neighbors_u = adj_list[u] - {u, v}
+            neighbors_v = adj_list[v] - {u, v}
             
             intersection = len(neighbors_u.intersection(neighbors_v))
             union = len(neighbors_u.union(neighbors_v))
