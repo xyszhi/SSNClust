@@ -128,11 +128,17 @@ class SSNAnalyzer:
 
         jaccard_weights = []
         
-        # 获取所有邻居集合以提高效率
+        # 获取所有邻居集合和度数以提高效率
         adj_list = [set(self.graph.neighbors(v)) for v in range(self.graph.vcount())]
+        degrees = self.graph.degree()
         
         for edge in self.graph.es:
             u, v = edge.tuple
+            # 叶节点边：Jaccard 框架不适用，直接保留原始权重
+            if degrees[u] == 1 or degrees[v] == 1:
+                jaccard_weights.append(old_weights[edge.index])
+                continue
+            
             # 排除端点自身，避免 Jaccard 系数偏高
             neighbors_u = adj_list[u] - {u, v}
             neighbors_v = adj_list[v] - {u, v}
