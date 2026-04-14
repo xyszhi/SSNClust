@@ -1,5 +1,4 @@
 import igraph as ig
-import math
 from .utils import parse_m8_tsv
 from typing import Optional, Dict, Any, List
 
@@ -31,7 +30,7 @@ class SSNGenerator:
                  alnlen_threshold: int = 0,
                  coverage_threshold: float = 0.0,
                  coverage_mode: str = 'min',
-                 weight_by: Optional[str] = 'evalue',
+                 weight_by: Optional[str] = 'fident',
                  **extra_filters: Any) -> ig.Graph:
         """
         根据过滤条件生成 SSN。
@@ -44,7 +43,7 @@ class SSNGenerator:
                               'min': qcov 和 tcov 都需 >= 阈值 (等同于 both)
                               'max': qcov 或 tcov 有一者 >= 阈值 (等同于 any)
                               'any': 同 max
-        :param weight_by: 权重基于哪个指标。'evalue' (计算 -log10), 'fident', 'bits' 或任何数值列名。
+        :param weight_by: 权重基于哪个指标。'fident', 'bits', 'fident_cov'（fident 与 coverage 的乘积）或任何数值列名。
         :param extra_filters: 额外的过滤条件 (列名=阈值)，默认执行 '列值 >= 阈值'。
         """
         nodes = set()
@@ -133,13 +132,23 @@ class SSNGenerator:
 
         # 计算权重 (如果指定了且在 edge_attrs 中)
         if weight_by:
-            if weight_by == 'evalue' and 'evalue' in self.graph.es.attributes():
-                # 特殊处理 evalue: -log10
-                weights = []
-                for ev in self.graph.es['evalue']:
-                    safe_evalue = max(ev, 1e-200)
-                    weights.append(-math.log10(safe_evalue))
-                self.graph.es['weight'] = weights
+            if weight_by == 'fident_cov':
+                # fident 与 coverage 的乘积，coverage 根据 coverage_mode 决定
+                es_attrs = self.graph.es.attributes()
+                if 'fident' in es_attrs and 'qcov' in es_attrs and 'tcov' in es_attrs:
+                    weights = []
+                    for e in self.graph.es:
+                        fident = e['fident']
+                        qcov = e['qcov']
+                        tcov = e['tcov']
+                        if coverage_mode == 'min':
+                            cov = min(qcov, tcov)
+                        elif coverage_mode == 'max':
+                            cov = max(qcov, tcov)
+                        else:  # 'any'
+                            cov = (qcov + tcov) / 2.0
+                        weights.append(fident * cov)
+                    self.graph.es['weight'] = weights
             elif weight_by in self.graph.es.attributes():
                 # 直接使用该列作为权重
                 self.graph.es['weight'] = self.graph.es[weight_by]
