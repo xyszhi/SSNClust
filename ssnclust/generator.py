@@ -31,6 +31,7 @@ class SSNGenerator:
                  coverage_threshold: float = 0.0,
                  coverage_mode: str = 'min',
                  weight_by: Optional[str] = 'fident',
+                 bidirectional_only: bool = False,
                  **extra_filters: Any) -> ig.Graph:
         """
         根据过滤条件生成 SSN。
@@ -44,6 +45,7 @@ class SSNGenerator:
                               'max': qcov 或 tcov 有一者 >= 阈值 (等同于 any)
                               'any': 同 max
         :param weight_by: 权重基于哪个指标。'fident', 'bits', 'fident_cov'（fident 与 coverage 的乘积）或任何数值列名。
+        :param bidirectional_only: 是否只保留双向比对的边。False（默认）表示保留所有比对边，包括单向比对；True 表示只保留 A->B 和 B->A 都存在的比对。
         :param extra_filters: 额外的过滤条件 (列名=阈值)，默认执行 '列值 >= 阈值'。
         """
         nodes = set()
@@ -102,9 +104,9 @@ class SSNGenerator:
             attrs = {k: v for k, v in row.items() if k not in ('query', 'target')}
             pair_attrs[(query, target)] = attrs
 
-        # 双向匹配过滤：只保留 (A, B) 和 (B, A) 都存在的比对对
+        # 双向匹配过滤：根据 bidirectional_only 决定是否保留单向比对
         for (query, target), attrs in pair_attrs.items():
-            if (target, query) not in directed_pairs:
+            if bidirectional_only and (target, query) not in directed_pairs:
                 continue  # 单向比对，跳过
             nodes.add(query)
             nodes.add(target)
