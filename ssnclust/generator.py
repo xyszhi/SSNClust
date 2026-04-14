@@ -50,16 +50,20 @@ class SSNGenerator:
         nodes = set()
         edges = []
         edge_attrs = {} # 用于存储所有提取的列作为边属性
+        # 记录所有通过过滤的有向比对对，用于双向匹配检查
+        directed_pairs = set()
+        # 临时存储每条有向比对的属性，键为 (query, target)
+        pair_attrs: dict = {}
 
         for row in parse_m8_tsv(self.file_path):
             query = row['query']
             target = row['target']
             
-            # 自环处理：仅在通过 evalue 过滤后才将节点加入图
+            # 自环处理
             if query == target:
-                if 'evalue' in row and row['evalue'] > evalue_threshold:
-                    continue
-                nodes.add(query)
+                # if 'evalue' in row and row['evalue'] > evalue_threshold:
+                #     continue
+                # nodes.add(query)
                 continue
 
             # 默认过滤
@@ -94,14 +98,19 @@ class SSNGenerator:
             if skip:
                 continue
 
+            # 记录通过过滤的有向比对对及其属性
+            directed_pairs.add((query, target))
+            attrs = {k: v for k, v in row.items() if k not in ('query', 'target')}
+            pair_attrs[(query, target)] = attrs
+
+        # 双向匹配过滤：只保留 (A, B) 和 (B, A) 都存在的比对对
+        for (query, target), attrs in pair_attrs.items():
+            if (target, query) not in directed_pairs:
+                continue  # 单向比对，跳过
             nodes.add(query)
             nodes.add(target)
             edges.append((query, target))
-            
-            # 收集该边的所有属性（除了 query 和 target）
-            for k, v in row.items():
-                if k in ('query', 'target'):
-                    continue
+            for k, v in attrs.items():
                 if k not in edge_attrs:
                     edge_attrs[k] = []
                 edge_attrs[k].append(v)
@@ -119,7 +128,7 @@ class SSNGenerator:
         for attr_name, values in edge_attrs.items():
             self.graph.es[attr_name] = values
 
-        # 去除重复边（如 BLAST/MMseqs2 双向比对产生的 A->B 和 B->A），对数值属性取均值
+        # 去除重复边（双向比对产生的 A->B 和 B->A），对数值属性取均值
         self.graph.simplify(multiple=True, loops=True, combine_edges='mean')
 
         # 计算权重 (如果指定了且在 edge_attrs 中)
