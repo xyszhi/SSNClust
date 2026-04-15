@@ -65,8 +65,16 @@ def main():
         analyzer.apply_jaccard_weighting(base_weight='weight' if weight_by else 'none')
 
     stats = analyzer.basic_stats()
+
+    # 从节点名中提取基因组ID（格式: 基因组ID|序列ID）
+    all_names = graph.vs['name']
+    total_genomes = len({n.split('|')[0] for n in all_names if '|' in n})
+    avg_seq_per_genome = stats['nodes'] / total_genomes if total_genomes > 0 else float('nan')
+
     print(f"  节点数: {stats['nodes']}")
     print(f"  边数: {stats['edges']}")
+    print(f"  涉及基因组数: {total_genomes}")
+    print(f"  平均每基因组序列数: {avg_seq_per_genome:.2f}")
 
     if args.stats:
         print(f"网络统计信息:")
@@ -142,8 +150,8 @@ def main():
 
         # 对每个社区计算网络统计信息并以表格形式输出
         # 列定义: (表头文字, 数据宽度)，宽度按显示宽度（中文占2）手动指定
-        col_headers = ["社区", "节点数", "边数", "密度", "平均度", "最大度", "最小度", "平均聚集系数"]
-        col_widths = [4, 8, 8, 10, 8, 6, 6, 10]
+        col_headers = ["社区", "节点数", "边数", "密度", "平均度", "最大度", "最小度", "平均聚集系数", "基因组数", "基因组占比", "序列/基因组"]
+        col_widths = [4, 8, 8, 10, 8, 6, 6, 10, 8, 10, 10]
 
         # 构建表头：每列右对齐，用空格补足显示宽度（中文字符占2个显示位）
         def pad_header(text, width):
@@ -162,6 +170,10 @@ def main():
             subgraph = graph.induced_subgraph(clustering[cid])
             sub_analyzer = SSNAnalyzer(subgraph)
             s = sub_analyzer.basic_stats()
+            sub_names = subgraph.vs['name']
+            sub_genomes = len({n.split('|')[0] for n in sub_names if '|' in n})
+            genome_ratio = sub_genomes / total_genomes if total_genomes > 0 else 0.0
+            seq_per_genome = s['nodes'] / sub_genomes if sub_genomes > 0 else float('nan')
             row = (
                 f"{cid:{col_widths[0]}d}  "
                 f"{s['nodes']:{col_widths[1]}d}  "
@@ -170,7 +182,10 @@ def main():
                 f"{s['avg_degree']:{col_widths[4]}.2f}  "
                 f"{s['max_degree']:{col_widths[5]}d}  "
                 f"{s['min_degree']:{col_widths[6]}d}  "
-                f"{s['avg_clustering']:{col_widths[7]}.6f}"
+                f"{s['avg_clustering']:{col_widths[7]}.6f}  "
+                f"{sub_genomes:{col_widths[8]}d}  "
+                f"{genome_ratio:{col_widths[9]}.4f}  "
+                f"{seq_per_genome:{col_widths[10]}.2f}"
             )
             print(row)
 
