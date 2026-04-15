@@ -28,7 +28,8 @@ def main():
     parser.add_argument("--leiden-method",
                         choices=['modularity', 'cpm', 'rb_config', 'rber', 'significance', 'surprise'],
                         default='modularity', help="Leiden 聚类的具体方法 (默认: modularity)")
-    parser.add_argument("--leiden-resolution", type=float, help="Leiden 聚类的分辨率参数 (仅--leiden-method为cpm、rber、rb_config时有效)")
+    parser.add_argument("--leiden-resolution", type=float,
+                        help="Leiden 聚类的分辨率参数 (仅--leiden-method为cpm、rber、rb_config时有效)")
     parser.add_argument("--mcl-inflation", type=float, default=2.0, help="MCL 聚类的膨胀系数 (默认: 2.0)")
     parser.add_argument("--sbm-type", choices=['standard', 'nested'], default='standard',
                         help="SBM 模型类型: standard (标准), nested (层次/嵌套, 自动推断层级)")
@@ -137,10 +138,41 @@ def main():
 
     if args.cluster and clustering:
         graph.vs["cluster"] = clustering.membership
-        print(f"聚类完成，共发现 {len(clustering)} 个社区。")
-        # 如果有输出文件，重新保存一次以包含聚类结果
-        if args.output:
-            generator.save(args.output)
+        print(f"聚类完成，共发现 {len(clustering)} 个社区:")
+
+        # 对每个社区计算网络统计信息并以表格形式输出
+        # 列定义: (表头文字, 数据宽度)，宽度按显示宽度（中文占2）手动指定
+        col_headers = ["社区", "节点数", "边数", "密度", "平均度", "最大度", "最小度", "平均聚集系数"]
+        col_widths = [4, 8, 8, 10, 8, 6, 6, 10]
+
+        # 构建表头：每列右对齐，用空格补足显示宽度（中文字符占2个显示位）
+        def pad_header(text, width):
+            # 计算中文字符数（每个中文占2个显示位）
+            display_len = sum(2 if ord(c) > 127 else 1 for c in text)
+            pad = width - display_len
+            return " " * max(pad, 0) + text
+
+        header_parts = [pad_header(h, w) for h, w in zip(col_headers, col_widths)]
+        header = "  ".join(header_parts)
+        sep_width = sum(col_widths) + 2 * (len(col_widths) - 1)
+        print(header)
+        print("-" * sep_width)
+
+        for cid in range(len(clustering)):
+            subgraph = graph.induced_subgraph(clustering[cid])
+            sub_analyzer = SSNAnalyzer(subgraph)
+            s = sub_analyzer.basic_stats()
+            row = (
+                f"{cid:{col_widths[0]}d}  "
+                f"{s['nodes']:{col_widths[1]}d}  "
+                f"{s['edges']:{col_widths[2]}d}  "
+                f"{s['density']:{col_widths[3]}.6f}  "
+                f"{s['avg_degree']:{col_widths[4]}.2f}  "
+                f"{s['max_degree']:{col_widths[5]}d}  "
+                f"{s['min_degree']:{col_widths[6]}d}  "
+                f"{s['avg_clustering']:{col_widths[7]}.6f}"
+            )
+            print(row)
 
 
 if __name__ == "__main__":
