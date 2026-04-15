@@ -44,7 +44,7 @@ class SSNGenerator:
                               'min': qcov 和 tcov 都需 >= 阈值 (等同于 both)
                               'max': qcov 或 tcov 有一者 >= 阈值 (等同于 any)
                               'any': 同 max
-        :param weight_by: 权重基于哪个指标。'fident', 'bits', 'fident_cov'（fident 与 coverage 的乘积）或任何数值列名。
+        :param weight_by: 权重基于哪个指标。'fident', 'bits', 'fident_cov'（fident 与 coverage 的乘积）、'fident_cov_harmonic'（fident 与 coverage 的调和平均数）或任何数值列名。
         :param bidirectional_only: 是否只保留双向比对的边。False（默认）表示保留所有比对边，包括单向比对；True 表示只保留 A->B 和 B->A 都存在的比对。
         :param extra_filters: 额外的过滤条件 (列名=阈值)，默认执行 '列值 >= 阈值'。
         """
@@ -134,8 +134,8 @@ class SSNGenerator:
 
         # 计算权重 (如果指定了且在 edge_attrs 中)
         if weight_by:
-            if weight_by == 'fident_cov':
-                # fident 与 coverage 的乘积，coverage 根据 coverage_mode 决定
+            if weight_by in ('fident_cov', 'fident_cov_harmonic'):
+                # coverage 根据 coverage_mode 决定
                 es_attrs = self.graph.es.attributes()
                 if 'fident' in es_attrs and 'qcov' in es_attrs and 'tcov' in es_attrs:
                     weights = []
@@ -149,7 +149,11 @@ class SSNGenerator:
                             cov = max(qcov, tcov)
                         else:  # 'any'
                             cov = (qcov + tcov) / 2.0
-                        weights.append(fident * cov)
+                        if weight_by == 'fident_cov_harmonic':
+                            # fident 与 cov 的调和平均数: 2*a*b/(a+b)
+                            weights.append(2 * fident * cov / (fident + cov) if (fident + cov) > 0 else 0.0)
+                        else:
+                            weights.append(fident * cov)
                     self.graph.es['weight'] = weights
             elif weight_by in self.graph.es.attributes():
                 # 直接使用该列作为权重

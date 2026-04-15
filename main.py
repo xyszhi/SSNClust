@@ -17,7 +17,7 @@ def main():
     parser.add_argument("--coverage", type=float, default=0.0, help="Coverage 阈值 (0.0-1.0, 默认: 0.0)")
     parser.add_argument("--cov-mode", choices=['min', 'max', 'any'], default='min',
                         help="Coverage 过滤模式 (默认: min)")
-    parser.add_argument("--weight", choices=['fident', 'bits', 'fident_cov', 'none'], default='fident',
+    parser.add_argument("--weight", choices=['fident', 'bits', 'fident_cov', 'fident_cov_harmonic', 'none'], default='fident',
                         help="权重计算依据 (默认: fident)")
     parser.add_argument("--only-bidirectional", action="store_true",
                         help="只保留双向比对边 (默认保留所有比对边，包括单向)")
