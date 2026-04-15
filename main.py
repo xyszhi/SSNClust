@@ -28,7 +28,7 @@ def main():
     parser.add_argument("--leiden-method",
                         choices=['modularity', 'cpm', 'rb_config', 'rber', 'significance', 'surprise'],
                         default='modularity', help="Leiden 聚类的具体方法 (默认: modularity)")
-    parser.add_argument("--resolution", type=float, help="Leiden 聚类的分辨率参数")
+    parser.add_argument("--leiden-resolution", type=float, help="Leiden 聚类的分辨率参数 (仅--leiden-method为cpm、rber、rb_config时有效)")
     parser.add_argument("--mcl-inflation", type=float, default=2.0, help="MCL 聚类的膨胀系数 (默认: 2.0)")
     parser.add_argument("--sbm-type", choices=['standard', 'nested'], default='standard',
                         help="SBM 模型类型: standard (标准), nested (层次/嵌套, 自动推断层级)")
@@ -103,7 +103,7 @@ def main():
         partition_type = leiden_method_map.get(args.leiden_method, 'Modularity')
 
         # 确定使用的分辨率参数
-        res = args.resolution
+        res = args.leiden_resolution
         kwargs = {}
         if partition_type in ['CPM', 'RBConfiguration', 'RBER']:
             if res is None:
