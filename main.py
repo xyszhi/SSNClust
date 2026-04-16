@@ -25,13 +25,13 @@ def main():
     parser.add_argument("--output-dir", "-d", help="聚类结果输出目录：每个社区的序列ID保存为 .txt 文件、子网络保存为 .graphml 文件，并生成汇总 TSV")
     parser.add_argument("--stats", action="store_true", help="显示网络基础统计信息")
     parser.add_argument("--jaccard", action="store_true", help="对边权重应用 Jaccard 加权")
-    parser.add_argument("--cluster", choices=['leiden', 'spectral', 'mcl', 'nmf', 'sbm'], help="执行指定的聚类方法")
+    parser.add_argument("--cluster", choices=['leiden', 'mcl', 'spectral', 'nmf', 'sbm'], help="执行指定的聚类方法")
     parser.add_argument("--leiden-method",
                         choices=['modularity', 'cpm', 'rb_config', 'rber', 'significance', 'surprise'],
                         default='modularity', help="Leiden 聚类的具体方法 (默认: modularity)")
     parser.add_argument("--leiden-resolution", type=float,
                         help="Leiden 聚类的分辨率参数 (仅--leiden-method为cpm、rber、rb_config时有效)")
-    parser.add_argument("--mcl-inflation", type=float, default=2.0, help="MCL 聚类的膨胀系数 (默认: 2.0)")
+    parser.add_argument("--mcl-inflation", type=float, default=1.2, help="MCL 聚类的膨胀系数 (默认: 1.2)")
     parser.add_argument("--sbm-type", choices=['standard', 'nested'], default='standard',
                         help="SBM 模型类型: standard (标准), nested (层次/嵌套, 自动推断层级)")
     parser.add_argument("--no-deg-corr", action="store_true",
