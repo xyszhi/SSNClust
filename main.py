@@ -1,4 +1,5 @@
 import argparse
+import os
 from ssnclust.generator import SSNGenerator
 from ssnclust.analyzer import SSNAnalyzer
 from ssnclust.clustering.leiden_alg import LeidenClustering
@@ -21,7 +22,7 @@ def main():
                         help="权重计算依据 (默认: fident)")
     parser.add_argument("--only-bidirectional", action="store_true",
                         help="只保留双向比对边 (默认保留所有比对边，包括单向)")
-    parser.add_argument("--output", "-o", help="输出图文件路径 (推荐扩展名: .graphml)")
+    parser.add_argument("--output-dir", "-d", help="聚类结果输出目录：每个社区的序列ID保存为 .txt 文件、子网络保存为 .graphml 文件，并生成汇总 TSV")
     parser.add_argument("--stats", action="store_true", help="显示网络基础统计信息")
     parser.add_argument("--jaccard", action="store_true", help="对边权重应用 Jaccard 加权")
     parser.add_argument("--cluster", choices=['leiden', 'spectral', 'mcl', 'nmf', 'sbm'], help="执行指定的聚类方法")
@@ -93,8 +94,6 @@ def main():
             print(f"  最大权重: {stats['max_weight']:.4f}")
             print(f"  权重标准差: {stats['sd_weight']:.4f}")
 
-    if args.output:
-        generator.save(args.output)
 
     if args.cluster == 'leiden':
         print(f"正在使用 Leiden ({args.leiden_method}) 进行聚类...")
@@ -166,6 +165,13 @@ def main():
         print(header)
         print("-" * sep_width)
 
+        # 如果指定了 --output-dir，准备输出目录和汇总文件
+        if args.output_dir:
+            os.makedirs(args.output_dir, exist_ok=True)
+            summary_path = os.path.join(args.output_dir, "cluster_summary.tsv")
+            summary_file = open(summary_path, 'w', encoding='utf-8')
+            summary_file.write("cluster\tnodes\tedges\tdensity\tavg_degree\tmax_degree\tmin_degree\tavg_clustering\tgenomes\tgenome_ratio\tseq_per_genome\n")
+
         for cid in range(len(clustering)):
             subgraph = graph.induced_subgraph(clustering[cid])
             sub_analyzer = SSNAnalyzer(subgraph)
@@ -189,6 +195,29 @@ def main():
             )
             print(row)
 
+            if args.output_dir:
+                # 保存子网络节点名（序列ID）
+                sub_path = os.path.join(args.output_dir, f"cluster_{cid}.txt")
+                with open(sub_path, 'w', encoding='utf-8') as f:
+                    f.write('\n'.join(sub_names) + '\n')
+                # 保存子网络 graphml
+                graphml_path = os.path.join(args.output_dir, f"cluster_{cid}.graphml")
+                subgraph.write(graphml_path)
+                # 写入汇总行
+                seq_per_genome_str = f"{seq_per_genome:.2f}" if sub_genomes > 0 else "nan"
+                summary_file.write(
+                    f"{cid}\t{s['nodes']}\t{s['edges']}\t{s['density']:.6f}\t"
+                    f"{s['avg_degree']:.2f}\t{s['max_degree']}\t{s['min_degree']}\t"
+                    f"{s['avg_clustering']:.6f}\t{sub_genomes}\t{genome_ratio:.4f}\t{seq_per_genome_str}\n"
+                )
+        print("-" * sep_width)
+
+        if args.output_dir:
+            summary_file.close()
+            print(f"各社区序列ID及子网络已保存至目录: {args.output_dir}")
+            print(f"汇总统计文件: {summary_path}")
+            ssn_path = os.path.join(args.output_dir, "ssn.graphml")
+            generator.save(ssn_path)
 
 if __name__ == "__main__":
     main()
