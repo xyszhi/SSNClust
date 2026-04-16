@@ -112,6 +112,46 @@ class SSNAnalyzer:
         w = self.graph.es[w_attr] if w_attr and w_attr in self.graph.es.attributes() else None
         return self.graph.modularity(membership, weights=w)
 
+    def inter_cluster_edge_ratio(
+        self,
+        clustering: ig.VertexClustering,
+        weights: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        计算跨 cluster 的边比例，用于评估聚类质量。
+        比例越低，说明社区内部连接越紧密，聚类效果越好。
+
+        :param clustering: igraph.VertexClustering 聚类结果
+        :param weights: 边权重属性名（可选）。如果为 None，则尝试使用 self.active_weight。
+        :return: 包含边数统计和比例的字典
+        """
+        membership = clustering.membership
+        total_edges = self.graph.ecount()
+        inter_edges = sum(
+            1 for e in self.graph.es
+            if membership[e.source] != membership[e.target]
+        )
+        intra_edges = total_edges - inter_edges
+
+        result: Dict[str, Any] = {
+            "num_clusters": len(set(membership)),
+            "total_edges": total_edges,
+            "intra_cluster_edges": intra_edges,
+            "inter_cluster_edges": inter_edges,
+            "inter_cluster_ratio": inter_edges / total_edges if total_edges > 0 else 0.0,
+        }
+
+        w_attr = weights or self.active_weight
+        if w_attr and w_attr in self.graph.edge_attributes():
+            total_weight = sum(self.graph.es[w_attr])
+            inter_weight = sum(
+                e[w_attr] for e in self.graph.es
+                if membership[e.source] != membership[e.target]
+            )
+            result["inter_cluster_weight_ratio"] = inter_weight / total_weight if total_weight > 0 else 0.0
+
+        return result
+
     def apply_jaccard_weighting(self, base_weight: str = 'weight', new_attr: str = 'jaccard_weight'):
         """
         对边的权重进行 Jaccard 系数加权。

@@ -212,6 +212,17 @@ def main():
                 )
         print("-" * sep_width)
 
+        # 计算并输出跨 cluster 边比例（聚类质量评估）
+        ratio_metrics = analyzer.inter_cluster_edge_ratio(clustering)
+        print(f"\n聚类质量评估:")
+        print(f"  cluster 数量:       {ratio_metrics['num_clusters']}")
+        print(f"  总边数:             {ratio_metrics['total_edges']}")
+        print(f"  cluster 内部边数:   {ratio_metrics['intra_cluster_edges']}")
+        print(f"  跨 cluster 边数:    {ratio_metrics['inter_cluster_edges']}")
+        print(f"  跨 cluster 边比例:  {ratio_metrics['inter_cluster_ratio']:.4f}  (越低越好)")
+        if 'inter_cluster_weight_ratio' in ratio_metrics:
+            print(f"  跨 cluster 加权比例:{ratio_metrics['inter_cluster_weight_ratio']:.4f}  (越低越好)")
+
         if args.output_dir:
             summary_file.close()
             print(f"各社区序列ID及子网络已保存至目录: {args.output_dir}")
