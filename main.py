@@ -1,7 +1,8 @@
 import argparse
+import math
 import os
 from ssnclust.generator import SSNGenerator
-from ssnclust.analyzer import SSNAnalyzer
+from ssnclust.analyzer import SSNAnalyzer, PfamDomainAnalyzer
 from ssnclust.clustering.leiden_alg import LeidenClustering
 from ssnclust.clustering.spectral import SSNSpectralClustering
 from ssnclust.clustering.mcl_wrapper import MCLClustering
@@ -37,6 +38,7 @@ def main():
     parser.add_argument("--no-deg-corr", action="store_true",
                         help="关闭 SBM 的度校正 (默认开启，建议开启以处理 SSN 中的高通量节点)")
     parser.add_argument("--n-clusters", type=int, default=8, help="聚类数量 (用于谱聚类、NMF 等, 默认: 8)")
+    parser.add_argument("--pfam-db", help="hmmscan 结果 SQLite 数据库路径，用于计算每个 cluster 的结构域一致性熵值")
 
     args = parser.parse_args()
 
@@ -170,7 +172,10 @@ def main():
             os.makedirs(args.output_dir, exist_ok=True)
             summary_path = os.path.join(args.output_dir, "cluster_summary.tsv")
             summary_file = open(summary_path, 'w', encoding='utf-8')
-            summary_file.write("cluster\tnodes\tedges\tdensity\tavg_degree\tmax_degree\tmin_degree\tavg_clustering\tgenomes\tgenome_ratio\tseq_per_genome\n")
+            pfam_header = "\tdomain_entropy\tseqs_with_hit\thit_ratio\tunique_domains\ttop_domains" if args.pfam_db else ""
+            summary_file.write("cluster\tnodes\tedges\tdensity\tavg_degree\tmax_degree\tmin_degree\tavg_clustering\tgenomes\tgenome_ratio\tseq_per_genome" + pfam_header + "\n")
+
+        pfam_analyzer = PfamDomainAnalyzer(args.pfam_db) if args.pfam_db else None
 
         for cid in range(len(clustering)):
             subgraph = graph.induced_subgraph(clustering[cid])
@@ -180,6 +185,14 @@ def main():
             sub_genomes = len({n.split('|')[0] for n in sub_names if '|' in n})
             genome_ratio = sub_genomes / total_genomes if total_genomes > 0 else 0.0
             seq_per_genome = s['nodes'] / sub_genomes if sub_genomes > 0 else float('nan')
+
+            pfam_info = pfam_analyzer.domain_entropy(list(sub_names)) if pfam_analyzer else None
+
+            pfam_suffix = ""
+            if pfam_info:
+                entropy_str = f"{pfam_info['domain_entropy']:.4f}" if not math.isnan(pfam_info['domain_entropy']) else "nan"
+                pfam_suffix = f"  entropy={entropy_str}  hit={pfam_info['seqs_with_hit']}/{pfam_info['total_seqs']}({pfam_info['hit_ratio']:.2%})  uniq_domains={pfam_info['unique_domains']}"
+
             row = (
                 f"{cid:{col_widths[0]}d}  "
                 f"{s['nodes']:{col_widths[1]}d}  "
@@ -192,6 +205,7 @@ def main():
                 f"{sub_genomes:{col_widths[8]}d}  "
                 f"{genome_ratio:{col_widths[9]}.4f}  "
                 f"{seq_per_genome:{col_widths[10]}.2f}"
+                + pfam_suffix
             )
             print(row)
 
@@ -205,10 +219,15 @@ def main():
                 subgraph.write(graphml_path)
                 # 写入汇总行
                 seq_per_genome_str = f"{seq_per_genome:.2f}" if sub_genomes > 0 else "nan"
+                pfam_tsv = ""
+                if pfam_info:
+                    entropy_tsv = f"{pfam_info['domain_entropy']:.4f}" if not math.isnan(pfam_info['domain_entropy']) else "nan"
+                    top_str = "|".join(f"{d}:{c}" for d, c in pfam_info['top_domains'])
+                    pfam_tsv = f"\t{entropy_tsv}\t{pfam_info['seqs_with_hit']}\t{pfam_info['hit_ratio']:.4f}\t{pfam_info['unique_domains']}\t{top_str}"
                 summary_file.write(
                     f"{cid}\t{s['nodes']}\t{s['edges']}\t{s['density']:.6f}\t"
                     f"{s['avg_degree']:.2f}\t{s['max_degree']}\t{s['min_degree']}\t"
-                    f"{s['avg_clustering']:.6f}\t{sub_genomes}\t{genome_ratio:.4f}\t{seq_per_genome_str}\n"
+                    f"{s['avg_clustering']:.6f}\t{sub_genomes}\t{genome_ratio:.4f}\t{seq_per_genome_str}{pfam_tsv}\n"
                 )
         print("-" * sep_width)
 
@@ -222,6 +241,9 @@ def main():
         print(f"  跨 cluster 边比例:  {ratio_metrics['inter_cluster_ratio']:.4f}  (越低越好)")
         if 'inter_cluster_weight_ratio' in ratio_metrics:
             print(f"  跨 cluster 加权比例:{ratio_metrics['inter_cluster_weight_ratio']:.4f}  (越低越好)")
+
+        if pfam_analyzer:
+            pfam_analyzer.close()
 
         if args.output_dir:
             summary_file.close()

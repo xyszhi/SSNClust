@@ -1,5 +1,8 @@
 import igraph as ig
+import math
+import sqlite3
 import statistics
+from collections import Counter
 from typing import Dict, Any, List, Optional
 
 class SSNAnalyzer:
@@ -192,3 +195,95 @@ class SSNAnalyzer:
         self.graph.es[new_attr] = jaccard_weights
         self.active_weight = new_attr
         print(f"已完成 Jaccard 加权，新权重已保存至属性: {new_attr}，后续分析将默认使用此权重。")
+
+
+class PfamDomainAnalyzer:
+    """
+    基于 SQLite 数据库查询蛋白质 Pfam 结构域，并计算一组序列的结构域信息熵，
+    用于评价 SSN 聚类结果中每个 cluster 的结构域一致程度。
+    """
+
+    def __init__(self, db_path: str, evalue_threshold: float = 1e-5):
+        """
+        :param db_path: hmmscan 结果 SQLite 数据库路径
+        :param evalue_threshold: E-value 过滤阈值（默认 1e-5）
+        """
+        self.db_path = db_path
+        self.evalue_threshold = evalue_threshold
+        self._conn: Optional[sqlite3.Connection] = None
+
+    def _get_conn(self) -> sqlite3.Connection:
+        if self._conn is None:
+            self._conn = sqlite3.connect(self.db_path)
+        return self._conn
+
+    def close(self):
+        """关闭数据库连接。"""
+        if self._conn is not None:
+            self._conn.close()
+            self._conn = None
+
+    def query_domains(self, seq_ids: List[str]) -> Dict[str, List[str]]:
+        """
+        批量查询一组序列 ID 对应的 Pfam 结构域。
+
+        :param seq_ids: 序列 ID 列表（对应数据库 target_name 字段）
+        :return: {seq_id: [domain1, domain2, ...]} 的字典；无命中则值为空列表
+        """
+        if not seq_ids:
+            return {}
+        conn = self._get_conn()
+        placeholders = ",".join("?" * len(seq_ids))
+        sql = (
+            f"SELECT target_name, query_name FROM hmmscan_tblout "
+            f"WHERE target_name IN ({placeholders}) AND full_evalue <= ? "
+            f"ORDER BY target_name, full_evalue"
+        )
+        cursor = conn.execute(sql, seq_ids + [self.evalue_threshold])
+        result: Dict[str, List[str]] = {sid: [] for sid in seq_ids}
+        for target_name, query_name in cursor:
+            if target_name in result:
+                result[target_name].append(query_name)
+        return result
+
+    def domain_entropy(self, seq_ids: List[str]) -> Dict[str, Any]:
+        """
+        计算一组序列所涉及 Pfam 结构域的信息熵，用于评价结构域一致性。
+        熵越低表示该 cluster 内序列的结构域组成越一致。
+
+        :param seq_ids: 序列 ID 列表
+        :return: 包含熵值及统计信息的字典
+        """
+        domain_map = self.query_domains(seq_ids)
+        total_seqs = len(seq_ids)
+        seqs_with_hit = sum(1 for v in domain_map.values() if v)
+
+        # 收集所有结构域（每条序列的每个结构域计一次，允许重复）
+        all_domains: List[str] = []
+        for domains in domain_map.values():
+            all_domains.extend(domains)
+
+        if not all_domains:
+            return {
+                "total_seqs": total_seqs,
+                "seqs_with_hit": 0,
+                "hit_ratio": 0.0,
+                "unique_domains": 0,
+                "domain_entropy": float("nan"),
+                "top_domains": []
+            }
+
+        counts = Counter(all_domains)
+        total = sum(counts.values())
+        entropy = -sum((c / total) * math.log2(c / total) for c in counts.values())
+
+        top_domains = counts.most_common(5)
+
+        return {
+            "total_seqs": total_seqs,
+            "seqs_with_hit": seqs_with_hit,
+            "hit_ratio": seqs_with_hit / total_seqs if total_seqs > 0 else 0.0,
+            "unique_domains": len(counts),
+            "domain_entropy": entropy,
+            "top_domains": top_domains
+        }
