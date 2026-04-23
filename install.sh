@@ -13,7 +13,7 @@ echo "=== SSNClust 安装脚本 ==="
 # 检查 Python 版本
 PY=$(command -v python3 || command -v python || true)
 if [ -z "$PY" ]; then
-    echo "错误: 未找到 Python，请先安装 Python 3.13+。"
+    echo "错误: 未找到 Python，请先安装 Python 3.11。"
     exit 1
 fi
 PY_VER=$("$PY" -c "import sys; print('%d.%d' % sys.version_info[:2])")
@@ -35,10 +35,10 @@ pip install -q \
     "igraph>=0.10.0,<0.12" \
     "leidenalg>=0.10.0,<0.11.0" \
     "markov-clustering>=0.0.6.dev0" \
-    "scikit-learn>=1.8.0" \
-    "scikit-network>=0.33.5" \
-    "scipy>=1.17.1" \
-    "numpy"
+    "scikit-learn>=1.3.0,<1.6" \
+    "scikit-network>=0.32.0,<0.34" \
+    "scipy>=1.11.0,<1.14" \
+    "numpy<2"
 
 # 可选：graph-tool（需要 conda 或系统包管理器，pip 不支持）
 if [ "$WITH_GT" -eq 1 ]; then
