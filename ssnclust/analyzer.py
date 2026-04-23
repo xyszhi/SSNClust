@@ -5,6 +5,13 @@ import statistics
 from collections import Counter
 from typing import Dict, Any, List, Optional
 
+try:
+    import numpy as np
+    import scipy.sparse as sp
+    _NUMPY_AVAILABLE = True
+except ImportError:
+    _NUMPY_AVAILABLE = False
+
 class SSNAnalyzer:
     """
     SSN 网络特征描述模块，用于计算图的各种拓扑指标。
@@ -164,37 +171,82 @@ class SSNAnalyzer:
         :param new_attr: 加权后权重的属性名。
         """
         if base_weight not in self.graph.edge_attributes():
-            # 如果没有指定权重，则默认原始权重为 1.0
-            old_weights = [1.0] * self.graph.ecount()
+            old_weights = np.ones(self.graph.ecount()) if _NUMPY_AVAILABLE else [1.0] * self.graph.ecount()
         else:
             old_weights = self.graph.es[base_weight]
 
-        jaccard_weights = []
-        
-        # 获取所有邻居集合和度数以提高效率
-        adj_list = [set(self.graph.neighbors(v)) for v in range(self.graph.vcount())]
-        degrees = self.graph.degree()
-        
-        for edge in self.graph.es:
-            u, v = edge.tuple
-            # 叶节点边：Jaccard 框架不适用，直接保留原始权重
-            if degrees[u] == 1 or degrees[v] == 1:
-                jaccard_weights.append(old_weights[edge.index])
-                continue
-            
-            # 排除端点自身，避免 Jaccard 系数偏高
-            neighbors_u = adj_list[u] - {u, v}
-            neighbors_v = adj_list[v] - {u, v}
-            
-            intersection = len(neighbors_u.intersection(neighbors_v))
-            union = len(neighbors_u.union(neighbors_v))
-            
-            j_coeff = intersection / union if union > 0 else 0.0
-            jaccard_weights.append(old_weights[edge.index] * j_coeff)
-            
+        if _NUMPY_AVAILABLE:
+            jaccard_weights = self._apply_jaccard_weighting_fast(old_weights)
+        else:
+            jaccard_weights = self._apply_jaccard_weighting_fallback(old_weights)
+
         self.graph.es[new_attr] = jaccard_weights
         self.active_weight = new_attr
         print(f"已完成 Jaccard 加权，新权重已保存至属性: {new_attr}，后续分析将默认使用此权重。")
+
+    def _apply_jaccard_weighting_fast(self, old_weights) -> list:
+        """
+        使用 scipy 稀疏矩阵批量计算 Jaccard 系数，大幅提升大图性能。
+        对于边 (u,v)，Jaccard = |N(u)-{v} ∩ N(v)-{u}| / |N(u)-{v} ∪ N(v)-{u}|。
+        
+        利用 A²[u,v] = |N(u) ∩ N(v)|（A 无自环，故不含端点自身），
+        union = (deg_u - 1) + (deg_v - 1) - intersection，其中 -1 是排除对方端点。
+        """
+        n = self.graph.vcount()
+        edges = self.graph.get_edgelist()
+        if not edges:
+            return []
+
+        us = np.array([e[0] for e in edges], dtype=np.int32)
+        vs = np.array([e[1] for e in edges], dtype=np.int32)
+
+        # 构建无向邻接矩阵（对称，无自环）
+        data = np.ones(len(edges) * 2, dtype=np.float32)
+        row = np.concatenate([us, vs])
+        col = np.concatenate([vs, us])
+        A = sp.csr_matrix((data, (row, col)), shape=(n, n))
+
+        degrees = np.array(self.graph.degree(), dtype=np.float64)
+        old_w = np.array(old_weights, dtype=np.float64)
+
+        # A²[u,v] = |N(u) ∩ N(v)|（公共邻居数，不含 u、v 自身，因为 A 无自环）
+        A2 = A @ A
+        intersection = np.asarray(A2[us, vs]).ravel().astype(np.float64)
+
+        # 各自排除对方端点后的度数：deg(u)-1, deg(v)-1
+        deg_u = degrees[us] - 1.0
+        deg_v = degrees[vs] - 1.0
+        union = deg_u + deg_v - intersection
+
+        # 叶节点边（原始度数为1）：直接保留原始权重（j_coeff=1）
+        leaf_mask = (degrees[us] == 1) | (degrees[vs] == 1)
+
+        j_coeff = np.where(union > 0, intersection / union, 0.0)
+        j_coeff[leaf_mask] = 1.0
+
+        return (old_w * j_coeff).tolist()
+
+    def _apply_jaccard_weighting_fallback(self, old_weights) -> list:
+        """
+        纯 Python 回退实现（numpy/scipy 不可用时使用）。
+        """
+        jaccard_weights = []
+        adj_list = [set(self.graph.neighbors(v)) for v in range(self.graph.vcount())]
+        degrees = self.graph.degree()
+
+        for edge in self.graph.es:
+            u, v = edge.tuple
+            if degrees[u] == 1 or degrees[v] == 1:
+                jaccard_weights.append(old_weights[edge.index])
+                continue
+            neighbors_u = adj_list[u] - {u, v}
+            neighbors_v = adj_list[v] - {u, v}
+            intersection = len(neighbors_u & neighbors_v)
+            union = len(neighbors_u | neighbors_v)
+            j_coeff = intersection / union if union > 0 else 0.0
+            jaccard_weights.append(old_weights[edge.index] * j_coeff)
+
+        return jaccard_weights
 
 
 class PfamDomainAnalyzer:

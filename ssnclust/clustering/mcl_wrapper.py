@@ -1,5 +1,7 @@
+import warnings
 import igraph as ig
 import markov_clustering as mcl
+from scipy.sparse import SparseEfficiencyWarning
 from typing import List, Optional, Union
 
 
@@ -43,14 +45,16 @@ class MCLClustering:
         else:
             adj = self.graph.get_adjacency_sparse()
 
-        # 2. 运行 MCL
-        result_matrix = mcl.run_mcl(
-            adj,
-            inflation=inflation,
-            expansion=expansion,
-            iterations=iterations,
-            **kwargs
-        )
+        # 2. 运行 MCL（屏蔽第三方库内部的稀疏矩阵结构变更警告）
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=SparseEfficiencyWarning)
+            result_matrix = mcl.run_mcl(
+                adj,
+                inflation=inflation,
+                expansion=expansion,
+                iterations=iterations,
+                **kwargs
+            )
         
         # 3. 提取聚类结果
         clusters = mcl.get_clusters(result_matrix)
