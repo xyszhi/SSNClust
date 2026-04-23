@@ -137,7 +137,84 @@ python main.py examples/cluster_500.tsv --cluster spectral --n-clusters 10
 - `cluster_summary.tsv`：所有 cluster 的统计汇总（节点数、边数、密度、基因组数、Pfam 熵值等）
 - `ssn.graphml`：完整 SSN 网络
 
-## 5. 技术路线与建议
+## 5. 服务器部署
+
+### 5.1 一键安装（推荐）
+
+将项目克隆到服务器后，运行安装脚本即可自动创建虚拟环境并安装所有依赖：
+
+```bash
+git clone <your-repo-url> SSNClust
+cd SSNClust
+bash install.sh
+```
+
+安装完成后激活环境并运行：
+
+```bash
+source .venv/bin/activate
+python main.py examples/cluster_10.tsv --stats
+```
+
+如需同时提示 `graph-tool` 安装方式（用于高性能 SBM）：
+
+```bash
+bash install.sh --with-graph-tool
+```
+
+### 5.2 Docker 部署
+
+适合无法修改服务器 Python 环境、或需要隔离运行环境的场景。
+
+**构建镜像：**
+```bash
+docker build -t ssnclust .
+```
+
+**运行（将本地数据目录挂载进容器）：**
+```bash
+docker run --rm \
+    -v /path/to/your/data:/data \
+    -v /path/to/output:/output \
+    ssnclust \
+    /data/your_alignment.tsv \
+    --weight fident_cov --cov-mode any \
+    --jaccard --cluster mcl \
+    -d /output/results
+```
+
+**说明：**
+- `/data`：挂载输入数据目录（TSV 比对文件、hmmscan SQLite 数据库等）
+- `/output`：挂载输出目录，聚类结果将写入此处
+- 容器内 `ENTRYPOINT` 已设为 `python /app/main.py`，直接传参即可
+
+### 5.3 在 HPC 集群（SLURM）上提交作业
+
+```bash
+#!/bin/bash
+#SBATCH --job-name=ssnclust
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=32G
+#SBATCH --time=02:00:00
+#SBATCH --output=ssnclust_%j.log
+
+source /path/to/SSNClust/.venv/bin/activate
+
+python /path/to/SSNClust/main.py \
+    /path/to/cluster_999.tsv \
+    --weight fident_cov --cov-mode any \
+    --jaccard --cluster mcl --mcl-inflation 1.2 \
+    --stats --pfam-db /path/to/hmmscan_results.db \
+    -d /path/to/output/mcl_results
+```
+
+将上述内容保存为 `run_ssnclust.sh`，然后提交：
+
+```bash
+sbatch run_ssnclust.sh
+```
+
+## 6. 技术路线与建议
 
 1.  **性能优化**: Jaccard 加权使用 scipy 稀疏矩阵向量化实现，在 500 万条边的网络上相比纯 Python 循环提速约 4 倍。对于千万级别的边，建议使用 `graph-tool` 处理 SBM，因为它具有高效的 C++ 后端。
 2.  **权重选择**: `fident_cov`（identity × coverage）综合考虑了比对质量和覆盖度，通常是 SSN 分析的推荐权重；`fident_cov_harmonic` 对低覆盖度的比对惩罚更强。

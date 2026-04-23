@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.git/
+.idea/
+*.egg-info/
+dist/
+build/
+*.md
+LICENSE
+install.sh
+examples/
