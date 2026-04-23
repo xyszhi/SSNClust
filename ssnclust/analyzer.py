@@ -221,7 +221,8 @@ class SSNAnalyzer:
         # 叶节点边（原始度数为1）：直接保留原始权重（j_coeff=1）
         leaf_mask = (degrees[us] == 1) | (degrees[vs] == 1)
 
-        j_coeff = np.where(union > 0, intersection / union, 0.0)
+        safe_union = np.where(union > 0, union, 1.0)
+        j_coeff = np.where(union > 0, intersection / safe_union, 0.0)
         j_coeff[leaf_mask] = 1.0
 
         return (old_w * j_coeff).tolist()
