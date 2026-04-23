@@ -34,10 +34,10 @@ echo "正在安装核心依赖..."
 pip install -q \
     "igraph>=0.10.0,<0.12" \
     "leidenalg>=0.10.0,<0.11.0" \
+    "scipy>=1.11.0,<1.14" \
     "markov-clustering>=0.0.6.dev0" \
     "scikit-learn>=1.3.0,<1.6" \
     "scikit-network>=0.32.0,<0.34" \
-    "scipy>=1.11.0,<1.14" \
     "numpy<2"
 
 # 可选：graph-tool（需要 conda 或系统包管理器，pip 不支持）
