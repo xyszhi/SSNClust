@@ -40,6 +40,8 @@ def main():
                         help="关闭 SBM 的度校正 (默认开启，建议开启以处理 SSN 中的高通量节点)")
     parser.add_argument("--n-clusters", type=int, default=8, help="聚类数量 (用于谱聚类、NMF 等, 默认: 8)")
     parser.add_argument("--pfam-db", help="hmmscan 结果 SQLite 数据库路径，用于计算每个 cluster 的结构域一致性熵值")
+    parser.add_argument("--retained-fields", default="",
+                        help="要保留在边属性中的额外字段，多个字段用逗号分隔 (默认: 空，仅保留 weight 或 jaccard_weight)")
 
     args = parser.parse_args()
 
@@ -49,6 +51,8 @@ def main():
     generator = SSNGenerator(args.input)
     weight_by = args.weight if args.weight != 'none' else None
 
+    retained_fields = [f.strip() for f in args.retained_fields.split(',') if f.strip()] if args.retained_fields else []
+
     graph = generator.generate(
         evalue_threshold=args.evalue,
         identity_threshold=args.identity,
@@ -56,7 +60,8 @@ def main():
         coverage_threshold=args.coverage,
         coverage_mode=args.cov_mode,
         weight_by=weight_by,
-        bidirectional_only=args.only_bidirectional
+        bidirectional_only=args.only_bidirectional,
+        retained_fields=retained_fields
     )
 
     print(f"SSN 构建完成:")

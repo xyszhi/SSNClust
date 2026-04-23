@@ -32,6 +32,7 @@ class SSNGenerator:
                  coverage_mode: str = 'min',
                  weight_by: Optional[str] = 'fident',
                  bidirectional_only: bool = False,
+                 retained_fields: Optional[List[str]] = None,
                  **extra_filters: Any) -> ig.Graph:
         """
         根据过滤条件生成 SSN。
@@ -46,6 +47,7 @@ class SSNGenerator:
                               'any': 同 max
         :param weight_by: 权重基于哪个指标。'fident', 'bits', 'fident_cov'（fident 与 coverage 的乘积）、'fident_cov_harmonic'（fident 与 coverage 的调和平均数）或任何数值列名。
         :param bidirectional_only: 是否只保留双向比对的边。False（默认）表示保留所有比对边，包括单向比对；True 表示只保留 A->B 和 B->A 都存在的比对。
+        :param retained_fields: 需要额外保留为边属性的字段列表（默认 None，仅保留过滤/权重所需列）。
         :param extra_filters: 额外的过滤条件 (列名=阈值)，默认执行 '列值 >= 阈值'。
         """
         nodes = set()
@@ -64,6 +66,8 @@ class SSNGenerator:
         if weight_by and weight_by not in ('fident_cov', 'fident_cov_harmonic', 'none'):
             _keep_cols.add(weight_by)
         _keep_cols.update(extra_filters.keys())  # 用户自定义过滤列也需保留
+        if retained_fields:
+            _keep_cols.update(retained_fields)  # 用户指定的额外保留字段
 
         for row in parse_m8_tsv(self.file_path):
             query = row['query']
