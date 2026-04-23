@@ -32,8 +32,8 @@ pip install --upgrade pip -q
 # 安装核心依赖
 echo "正在安装核心依赖..."
 pip install -q \
-    "igraph>=1.0.0" \
-    "leidenalg>=0.11.0" \
+    "igraph>=0.10.0,<0.12" \
+    "leidenalg>=0.10.0,<0.11.0" \
     "markov-clustering>=0.0.6.dev0" \
     "scikit-learn>=1.8.0" \
     "scikit-network>=0.33.5" \

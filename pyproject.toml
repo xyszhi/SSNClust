@@ -3,10 +3,10 @@ name = "ssnclust"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
-    "igraph>=1.0.0",
-    "leidenalg>=0.11.0",
+    "igraph>=0.10.0,<0.12",
+    "leidenalg>=0.10.0,<0.11.0",
     "markov-clustering>=0.0.6.dev0",
     "scikit-learn>=1.8.0",
     "scikit-network>=0.33.5",
