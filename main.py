@@ -137,7 +137,7 @@ def main():
     elif args.cluster == 'sbm':
         print(f"正在使用 SBM ({args.sbm_type}) 进行聚类...")
         sbm_obj = SBMClustering(graph)
-        res = args.resolution if args.resolution is not None else 1.0
+        res = args.leiden_resolution if args.leiden_resolution is not None else 1.0
         clustering = sbm_obj.cluster(
             sbm_type=args.sbm_type,
             degree_corrected=not args.no_deg_corr,
@@ -171,7 +171,7 @@ def main():
         if args.output_dir:
             os.makedirs(args.output_dir, exist_ok=True)
             summary_path = os.path.join(args.output_dir, "cluster_summary.tsv")
-            summary_file = open(summary_path, 'w', encoding='utf-8')
+            summary_file = open(summary_path, 'w', encoding='utf-8')  # noqa: WPS515 — closed explicitly at line 249
             pfam_header = "\tdomain_entropy\tseqs_with_hit\thit_ratio\tunique_domains\ttop_domains" if args.pfam_db else ""
             summary_file.write("cluster\tnodes\tedges\tdensity\tavg_degree\tmax_degree\tmin_degree\tavg_clustering\tgenomes\tgenome_ratio\tseq_per_genome" + pfam_header + "\n")
 

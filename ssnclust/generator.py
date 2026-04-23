@@ -129,8 +129,16 @@ class SSNGenerator:
         for attr_name, values in edge_attrs.items():
             self.graph.es[attr_name] = values
 
-        # 去除重复边（双向比对产生的 A->B 和 B->A），对数值属性取均值
-        self.graph.simplify(multiple=True, loops=True, combine_edges='mean')
+        # 去除重复边（双向比对产生的 A->B 和 B->A）
+        # 对数值属性取均值，对非数值属性取第一个值（'first'）
+        numeric_attrs = [
+            k for k in edge_attrs
+            if edge_attrs[k] and isinstance(edge_attrs[k][0], (int, float))
+        ]
+        non_numeric_attrs = [k for k in edge_attrs if k not in numeric_attrs]
+        combine = {k: 'mean' for k in numeric_attrs}
+        combine.update({k: 'first' for k in non_numeric_attrs})
+        self.graph.simplify(multiple=True, loops=True, combine_edges=combine if combine else 'mean')
 
         # 计算权重 (如果指定了且在 edge_attrs 中)
         if weight_by:
