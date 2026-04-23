@@ -66,8 +66,8 @@ SSNClust/
 usage: main.py [-h] [--evalue EVALUE] [--identity IDENTITY] [--alnlen ALNLEN]
                [--coverage COVERAGE] [--cov-mode {min,max,any}]
                [--weight {fident,bits,fident_cov,fident_cov_harmonic,none}]
-               [--only-bidirectional] [--output-dir OUTPUT_DIR] [--stats]
-               [--jaccard] [--cluster {leiden,mcl,spectral,nmf,sbm}]
+               [--only-bidirectional] [--output-dir OUTPUT_DIR] [--prefix PREFIX]
+               [--stats] [--jaccard] [--cluster {leiden,mcl,spectral,nmf,sbm}]
                [--leiden-method {modularity,cpm,rb_config,rber,significance,surprise}]
                [--leiden-resolution LEIDEN_RESOLUTION]
                [--mcl-inflation MCL_INFLATION]
@@ -87,6 +87,7 @@ usage: main.py [-h] [--evalue EVALUE] [--identity IDENTITY] [--alnlen ALNLEN]
 | `--weight` | 权重计算依据 | `fident` |
 | `--only-bidirectional` | 只保留双向比对边 | 关闭 |
 | `--output-dir` / `-d` | 聚类结果输出目录 | 无 |
+| `--prefix` | 子网络相关文件的名称前缀 | `cluster` |
 | `--stats` | 显示网络基础统计信息 | 关闭 |
 | `--jaccard` | 对边权重应用 Jaccard 加权 | 关闭 |
 | `--cluster` | 聚类方法：`leiden` / `mcl` / `spectral` / `nmf` / `sbm` | 无 |
@@ -131,10 +132,11 @@ python main.py examples/cluster_500.tsv --cluster spectral --n-clusters 10
 ```
 
 ### 4.6 输出说明
-指定 `--output-dir` 后，程序将在该目录下生成：
-- `cluster_<id>.txt`：每个 cluster 的序列 ID 列表
-- `cluster_<id>.graphml`：每个 cluster 的子网络（可在 Cytoscape/Gephi 中可视化）
-- `cluster_summary.tsv`：所有 cluster 的统计汇总（节点数、边数、密度、基因组数、Pfam 熵值等）
+指定 `--output-dir` 后，程序将在该目录下生成（文件名前缀由 `--prefix` 控制，默认为 `cluster`）：
+- `<prefix>_<id>.txt`：每个 cluster 的序列 ID 列表
+- `<prefix>_<id>.graphml`：每个 cluster 的子网络（可在 Cytoscape/Gephi 中可视化）
+- `<prefix>_<id>.tsv`：每个 cluster 的原始比对记录（从输入 TSV 中筛选）
+- `summary.tsv`：所有 cluster 的统计汇总，列包括：`cluster`、`nodes`、`edges`、`density`、`avg_degree`、`max_degree`、`min_degree`、`avg_clustering`、`genomes`、`genome_ratio`、`seq_per_genome`；若指定 `--pfam-db` 还会附加 `domain_entropy`、`seqs_with_hit`、`hit_ratio`、`unique_domains`、`top_domains`
 - `ssn.graphml`：完整 SSN 网络
 
 ## 5. 服务器部署
@@ -221,7 +223,7 @@ sbatch run_ssnclust.sh
 3.  **Jaccard 加权**: `--jaccard` 参数通过节点邻居重叠度校正边权重，能有效降低高度数枢纽节点对聚类的干扰，推荐在大型网络中使用。
 4.  **可视化**: 导出为 `.graphml` 格式，推荐在 Cytoscape 或 Gephi 中进行后期可视化。
 
-## 6. 依赖
+## 7. 依赖
 
 | 包 | 用途 |
 |----|------|
@@ -233,7 +235,7 @@ sbatch run_ssnclust.sh
 | `scikit-network` | SBM 回退实现（Potts 模型） |
 | `graph-tool` *(可选)* | SBM 贝叶斯推断（高性能，需单独安装） |
 
-## 7. 开发进度
+## 8. 开发进度
 
 - [x] 实现基础 `SSNGenerator` 类，支持多种比对格式解析、双向过滤、多种权重计算。
 - [x] 实现 `SSNAnalyzer` 类，支持网络特征描述（聚集系数、连通分量、最大流/最小切割、模块度、跨 cluster 边比例等）。
