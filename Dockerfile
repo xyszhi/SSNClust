@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
@@ -15,12 +15,12 @@ COPY main.py ./
 
 # 安装 Python 依赖
 RUN pip install --no-cache-dir \
-    "igraph>=1.0.0" \
-    "leidenalg>=0.11.0" \
+    "igraph>=0.10.0,<0.12" \
+    "leidenalg>=0.10.0,<0.11.0" \
+    "scipy>=1.11.0,<1.14" \
     "markov-clustering>=0.0.6.dev0" \
-    "scikit-learn>=1.8.0" \
-    "scikit-network>=0.33.5" \
-    "scipy>=1.17.1" \
+    "scikit-learn>=1.3.0,<1.6" \
+    "scikit-network>=0.32.0,<0.34" \
     "numpy"
 
 # 创建数据挂载目录

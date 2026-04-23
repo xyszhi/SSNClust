@@ -168,13 +168,10 @@ def main():
         print(header)
         print("-" * sep_width)
 
-        # 如果指定了 --output-dir，预先读取原始 TSV 行（含表头），用于后续子网络 TSV 输出
+        # 如果指定了 --output-dir，预先读取 TSV 表头，确定 query/target 列索引（不全量读入）
         if args.output_dir:
             with open(args.input, 'r', encoding='utf-8') as _f:
-                _tsv_lines = _f.readlines()
-            _tsv_header = _tsv_lines[0] if _tsv_lines else ""
-            _tsv_data_lines = _tsv_lines[1:] if len(_tsv_lines) > 1 else []
-            # 解析表头，确定 query/target 列索引
+                _tsv_header = _f.readline()
             _tsv_col_names = [c.strip() for c in _tsv_header.rstrip('\n').split('\t')]
             _query_idx = _tsv_col_names.index('query') if 'query' in _tsv_col_names else 0
             _target_idx = _tsv_col_names.index('target') if 'target' in _tsv_col_names else 1
@@ -229,16 +226,6 @@ def main():
                 # 保存子网络 graphml
                 graphml_path = os.path.join(args.output_dir, f"{args.prefix}_{cid}.graphml")
                 subgraph.write(graphml_path)
-                # 保存子网络比对信息 TSV
-                sub_name_set = set(sub_names)
-                tsv_out_path = os.path.join(args.output_dir, f"{args.prefix}_{cid}.tsv")
-                with open(tsv_out_path, 'w', encoding='utf-8') as _tf:
-                    _tf.write(_tsv_header)
-                    for _line in _tsv_data_lines:
-                        _cols = _line.rstrip('\n').split('\t')
-                        if len(_cols) > max(_query_idx, _target_idx):
-                            if _cols[_query_idx] in sub_name_set and _cols[_target_idx] in sub_name_set:
-                                _tf.write(_line)
                 # 写入汇总行
                 seq_per_genome_str = f"{seq_per_genome:.2f}" if sub_genomes > 0 else "nan"
                 pfam_tsv = ""
@@ -252,6 +239,34 @@ def main():
                     f"{s['avg_clustering']:.6f}\t{sub_genomes}\t{genome_ratio:.4f}\t{seq_per_genome_str}{pfam_tsv}\n"
                 )
         print("-" * sep_width)
+
+        # 如果指定了 --output-dir，一次流式扫描原始 TSV，将每行分发到对应 cluster 的 TSV 文件
+        # 避免将整个大文件全量读入内存
+        if args.output_dir:
+            # 构建 节点名 -> cluster id 的映射
+            _name_to_cid = {}
+            for _cid in range(len(clustering)):
+                for _name in graph.induced_subgraph(clustering[_cid]).vs['name']:
+                    _name_to_cid[_name] = _cid
+            # 打开所有 cluster 的 TSV 文件句柄
+            _min_col = max(_query_idx, _target_idx)
+            _tsv_handles = {
+                _cid: open(os.path.join(args.output_dir, f"{args.prefix}_{_cid}.tsv"), 'w', encoding='utf-8')
+                for _cid in range(len(clustering))
+            }
+            for _fh in _tsv_handles.values():
+                _fh.write(_tsv_header)
+            with open(args.input, 'r', encoding='utf-8') as _src:
+                _src.readline()  # 跳过表头
+                for _line in _src:  # 逐行流式读取，不占用额外内存
+                    _cols = _line.rstrip('\n').split('\t')
+                    if len(_cols) > _min_col:
+                        _q_cid = _name_to_cid.get(_cols[_query_idx])
+                        _t_cid = _name_to_cid.get(_cols[_target_idx])
+                        if _q_cid is not None and _q_cid == _t_cid:
+                            _tsv_handles[_q_cid].write(_line)
+            for _fh in _tsv_handles.values():
+                _fh.close()
 
         # 计算并输出跨 cluster 边比例（聚类质量评估）
         ratio_metrics = analyzer.inter_cluster_edge_ratio(clustering)

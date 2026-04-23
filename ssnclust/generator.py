@@ -56,6 +56,15 @@ class SSNGenerator:
         # 临时存储每条有向比对的属性，键为 (query, target)
         pair_attrs: dict = {}
 
+        # 确定需要保留的边属性列（过滤列 + 权重列 + 用户自定义过滤列）
+        # 丢弃对网络构建完全无用的列以节省内存
+        _FILTER_COLS = {'evalue', 'fident', 'alnlen', 'qcov', 'tcov'}
+        _WEIGHT_COLS = {'fident', 'bits', 'qcov', 'tcov'}  # fident_cov/harmonic 也依赖这些
+        _keep_cols = _FILTER_COLS | _WEIGHT_COLS
+        if weight_by and weight_by not in ('fident_cov', 'fident_cov_harmonic', 'none'):
+            _keep_cols.add(weight_by)
+        _keep_cols.update(extra_filters.keys())  # 用户自定义过滤列也需保留
+
         for row in parse_m8_tsv(self.file_path):
             query = row['query']
             target = row['target']
@@ -100,8 +109,9 @@ class SSNGenerator:
                 continue
 
             # 记录通过过滤的有向比对对及其属性
+            # 只保留参与过滤或权重计算的列，丢弃无用列以节省内存
             directed_pairs.add((query, target))
-            attrs = {k: v for k, v in row.items() if k not in ('query', 'target')}
+            attrs = {k: v for k, v in row.items() if k in _keep_cols}
             pair_attrs[(query, target)] = attrs
 
         # 双向匹配过滤：根据 bidirectional_only 决定是否保留单向比对
