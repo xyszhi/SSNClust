@@ -24,6 +24,7 @@ def main():
     parser.add_argument("--only-bidirectional", action="store_true",
                         help="只保留双向比对边 (默认保留所有比对边，包括单向)")
     parser.add_argument("--output-dir", "-d", help="聚类结果输出目录：每个社区的序列ID保存为 .txt 文件、子网络保存为 .graphml 文件，并生成汇总 TSV")
+    parser.add_argument("--prefix", default="cluster", help="子网络相关文件的名称前缀 (默认: cluster)")
     parser.add_argument("--stats", action="store_true", help="显示网络基础统计信息")
     parser.add_argument("--jaccard", action="store_true", help="对边权重应用 Jaccard 加权")
     parser.add_argument("--cluster", choices=['leiden', 'mcl', 'spectral', 'nmf', 'sbm'], help="执行指定的聚类方法")
@@ -181,7 +182,7 @@ def main():
         # 如果指定了 --output-dir，准备输出目录和汇总文件
         if args.output_dir:
             os.makedirs(args.output_dir, exist_ok=True)
-            summary_path = os.path.join(args.output_dir, "cluster_summary.tsv")
+            summary_path = os.path.join(args.output_dir, f"summary.tsv")
             summary_file = open(summary_path, 'w', encoding='utf-8')  # noqa: WPS515 — closed explicitly at line 249
             pfam_header = "\tdomain_entropy\tseqs_with_hit\thit_ratio\tunique_domains\ttop_domains" if args.pfam_db else ""
             summary_file.write("cluster\tnodes\tedges\tdensity\tavg_degree\tmax_degree\tmin_degree\tavg_clustering\tgenomes\tgenome_ratio\tseq_per_genome" + pfam_header + "\n")
@@ -222,15 +223,15 @@ def main():
 
             if args.output_dir:
                 # 保存子网络节点名（序列ID）
-                sub_path = os.path.join(args.output_dir, f"cluster_{cid}.txt")
+                sub_path = os.path.join(args.output_dir, f"{args.prefix}_{cid}.txt")
                 with open(sub_path, 'w', encoding='utf-8') as f:
                     f.write('\n'.join(sub_names) + '\n')
                 # 保存子网络 graphml
-                graphml_path = os.path.join(args.output_dir, f"cluster_{cid}.graphml")
+                graphml_path = os.path.join(args.output_dir, f"{args.prefix}_{cid}.graphml")
                 subgraph.write(graphml_path)
                 # 保存子网络比对信息 TSV
                 sub_name_set = set(sub_names)
-                tsv_out_path = os.path.join(args.output_dir, f"cluster_{cid}.tsv")
+                tsv_out_path = os.path.join(args.output_dir, f"{args.prefix}_{cid}.tsv")
                 with open(tsv_out_path, 'w', encoding='utf-8') as _tf:
                     _tf.write(_tsv_header)
                     for _line in _tsv_data_lines:
