@@ -167,6 +167,17 @@ def main():
         print(header)
         print("-" * sep_width)
 
+        # 如果指定了 --output-dir，预先读取原始 TSV 行（含表头），用于后续子网络 TSV 输出
+        if args.output_dir:
+            with open(args.input, 'r', encoding='utf-8') as _f:
+                _tsv_lines = _f.readlines()
+            _tsv_header = _tsv_lines[0] if _tsv_lines else ""
+            _tsv_data_lines = _tsv_lines[1:] if len(_tsv_lines) > 1 else []
+            # 解析表头，确定 query/target 列索引
+            _tsv_col_names = [c.strip() for c in _tsv_header.rstrip('\n').split('\t')]
+            _query_idx = _tsv_col_names.index('query') if 'query' in _tsv_col_names else 0
+            _target_idx = _tsv_col_names.index('target') if 'target' in _tsv_col_names else 1
+
         # 如果指定了 --output-dir，准备输出目录和汇总文件
         if args.output_dir:
             os.makedirs(args.output_dir, exist_ok=True)
@@ -217,6 +228,16 @@ def main():
                 # 保存子网络 graphml
                 graphml_path = os.path.join(args.output_dir, f"cluster_{cid}.graphml")
                 subgraph.write(graphml_path)
+                # 保存子网络比对信息 TSV
+                sub_name_set = set(sub_names)
+                tsv_out_path = os.path.join(args.output_dir, f"cluster_{cid}.tsv")
+                with open(tsv_out_path, 'w', encoding='utf-8') as _tf:
+                    _tf.write(_tsv_header)
+                    for _line in _tsv_data_lines:
+                        _cols = _line.rstrip('\n').split('\t')
+                        if len(_cols) > max(_query_idx, _target_idx):
+                            if _cols[_query_idx] in sub_name_set and _cols[_target_idx] in sub_name_set:
+                                _tf.write(_line)
                 # 写入汇总行
                 seq_per_genome_str = f"{seq_per_genome:.2f}" if sub_genomes > 0 else "nan"
                 pfam_tsv = ""
