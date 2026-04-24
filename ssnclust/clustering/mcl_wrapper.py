@@ -1,7 +1,15 @@
+import os
+import sys
 import warnings
 import igraph as ig
-import markov_clustering as mcl
 from scipy.sparse import SparseEfficiencyWarning
+
+# markov_clustering 在导入时若检测到 networkx 未安装会向 stderr 打印警告，
+# 此处临时抑制这些无关输出
+with open(os.devnull, 'w') as _devnull:
+    _old_stderr, sys.stderr = sys.stderr, _devnull
+    import markov_clustering as mcl
+    sys.stderr = _old_stderr
 from typing import List, Optional, Union
 
 

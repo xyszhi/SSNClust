@@ -1,4 +1,5 @@
 import argparse
+import json
 import math
 import os
 from ssnclust.generator import SSNGenerator
@@ -42,6 +43,7 @@ def main():
     parser.add_argument("--pfam-db", help="hmmscan 结果 SQLite 数据库路径，用于计算每个 cluster 的结构域一致性熵值")
     parser.add_argument("--retained-fields", default="",
                         help="要保留在边属性中的额外字段，多个字段用逗号分隔 (默认: 空，仅保留 weight 或 jaccard_weight)")
+    parser.add_argument("--json", metavar="FILE", help="将网络分析数据（参数、统计信息、聚类结果）以 JSON 格式保存到指定文件")
 
     args = parser.parse_args()
 
@@ -151,6 +153,8 @@ def main():
             weights=analyzer.active_weight
         )
 
+    pfam_analyzer = PfamDomainAnalyzer(args.pfam_db) if args.pfam_db else None
+
     if args.cluster and clustering:
         graph.vs["cluster"] = clustering.membership
         print(f"聚类完成，共发现 {len(clustering)} 个社区:")
@@ -188,8 +192,6 @@ def main():
             summary_file = open(summary_path, 'w', encoding='utf-8')  # noqa: WPS515 — closed explicitly at line 249
             pfam_header = "\tdomain_entropy\tseqs_with_hit\thit_ratio\tunique_domains\ttop_domains" if args.pfam_db else ""
             summary_file.write("cluster\tnodes\tedges\tdensity\tavg_degree\tmax_degree\tmin_degree\tavg_clustering\tgenomes\tgenome_ratio\tseq_per_genome" + pfam_header + "\n")
-
-        pfam_analyzer = PfamDomainAnalyzer(args.pfam_db) if args.pfam_db else None
 
         for cid in range(len(clustering)):
             subgraph = graph.induced_subgraph(clustering[cid])
@@ -293,6 +295,104 @@ def main():
             print(f"汇总统计文件: {summary_path}")
             ssn_path = os.path.join(args.output_dir, "ssn.graphml")
             generator.save(ssn_path)
+
+    if args.json:
+        json_data = {
+            "parameters": {
+                "input": args.input,
+                "evalue": args.evalue,
+                "identity": args.identity,
+                "alnlen": args.alnlen,
+                "coverage": args.coverage,
+                "cov_mode": args.cov_mode,
+                "weight": args.weight,
+                "only_bidirectional": args.only_bidirectional,
+                "jaccard": args.jaccard,
+                "cluster": args.cluster,
+                "leiden_method": args.leiden_method if args.cluster == 'leiden' else None,
+                "leiden_resolution": args.leiden_resolution if args.cluster == 'leiden' else None,
+                "mcl_inflation": args.mcl_inflation if args.cluster == 'mcl' else None,
+                "sbm_type": args.sbm_type if args.cluster == 'sbm' else None,
+                "no_deg_corr": args.no_deg_corr if args.cluster == 'sbm' else None,
+                "n_clusters": args.n_clusters if args.cluster in ('spectral', 'nmf') else None,
+                "retained_fields": retained_fields,
+            },
+            "network": {
+                "nodes": stats['nodes'],
+                "edges": stats['edges'],
+                "total_genomes": total_genomes,
+                "avg_seq_per_genome": avg_seq_per_genome if not math.isnan(avg_seq_per_genome) else None,
+                "density": stats['density'],
+                "is_connected": stats['is_connected'],
+                "components": stats['components'],
+                "lcc_size": stats['lcc_size'],
+                "lcc_percentage": stats['lcc_percentage'],
+                "avg_degree": stats['avg_degree'],
+                "max_degree": stats['max_degree'],
+                "min_degree": stats['min_degree'],
+                "avg_clustering": stats['avg_clustering'],
+                "weight_attr": analyzer.active_weight,
+                "total_weight": stats.get('total_weight'),
+                "avg_weight": stats.get('avg_weight'),
+                "min_weight": stats.get('min_weight'),
+                "max_weight": stats.get('max_weight'),
+                "sd_weight": stats.get('sd_weight'),
+            },
+            "clustering": None,
+        }
+
+        if args.cluster and clustering:
+            ratio_metrics = analyzer.inter_cluster_edge_ratio(clustering)
+            clusters_list = []
+            for cid in range(len(clustering)):
+                subgraph = graph.induced_subgraph(clustering[cid])
+                sub_analyzer = SSNAnalyzer(subgraph)
+                s = sub_analyzer.basic_stats()
+                sub_names = list(subgraph.vs['name'])
+                sub_genomes = len({n.split('|')[0] for n in sub_names if '|' in n})
+                genome_ratio = sub_genomes / total_genomes if total_genomes > 0 else 0.0
+                seq_per_genome = s['nodes'] / sub_genomes if sub_genomes > 0 else None
+                pfam_json = None
+                if pfam_analyzer:
+                    pi = pfam_analyzer.domain_entropy(list(sub_names))
+                    if pi:
+                        pfam_json = {
+                            "domain_entropy": pi['domain_entropy'] if not math.isnan(pi['domain_entropy']) else None,
+                            "seqs_with_hit": pi['seqs_with_hit'],
+                            "total_seqs": pi['total_seqs'],
+                            "hit_ratio": pi['hit_ratio'],
+                            "unique_domains": pi['unique_domains'],
+                            "top_domains": [{'domain': d, 'count': c} for d, c in pi['top_domains']],
+                        }
+                cluster_entry = {
+                    "id": cid,
+                    "nodes": s['nodes'],
+                    "edges": s['edges'],
+                    "density": s['density'],
+                    "avg_degree": s['avg_degree'],
+                    "max_degree": s['max_degree'],
+                    "min_degree": s['min_degree'],
+                    "avg_clustering": s['avg_clustering'],
+                    "genomes": sub_genomes,
+                    "genome_ratio": genome_ratio,
+                    "seq_per_genome": seq_per_genome,
+                    "pfam": pfam_json,
+                }
+                clusters_list.append(cluster_entry)
+            json_data["clustering"] = {
+                "method": args.cluster,
+                "num_clusters": ratio_metrics['num_clusters'],
+                "total_edges": ratio_metrics['total_edges'],
+                "intra_cluster_edges": ratio_metrics['intra_cluster_edges'],
+                "inter_cluster_edges": ratio_metrics['inter_cluster_edges'],
+                "inter_cluster_ratio": ratio_metrics['inter_cluster_ratio'],
+                "inter_cluster_weight_ratio": ratio_metrics.get('inter_cluster_weight_ratio'),
+                "clusters": clusters_list,
+            }
+
+        with open(args.json, 'w', encoding='utf-8') as jf:
+            json.dump(json_data, jf, ensure_ascii=False, indent=2)
+        print(f"分析数据已保存至: {args.json}")
 
 if __name__ == "__main__":
     main()
