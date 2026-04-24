@@ -68,9 +68,9 @@ def score_result(d):
         details['pfam_entropy'] = sum(entropies) / len(entropies)
     if hit_ratios:
         details['pfam_hit_ratio'] = sum(hit_ratios) / len(hit_ratios)
-    densities = [c['density'] for c in clusters if c.get('density') is not None]
-    degrees = [c['avg_degree'] for c in clusters if c.get('avg_degree') is not None]
-    clusterings = [c['avg_clustering'] for c in clusters if c.get('avg_clustering') is not None]
+    densities = [c['density'] for c in clusters if c.get('density') is not None and not (isinstance(c['density'], float) and math.isnan(c['density']))]
+    degrees = [c['avg_degree'] for c in clusters if c.get('avg_degree') is not None and not (isinstance(c['avg_degree'], float) and math.isnan(c['avg_degree']))]
+    clusterings = [c['avg_clustering'] for c in clusters if c.get('avg_clustering') is not None and not (isinstance(c['avg_clustering'], float) and math.isnan(c['avg_clustering']))]
     spg = [c['seq_per_genome'] for c in clusters
            if c.get('seq_per_genome') is not None and not (isinstance(c['seq_per_genome'], float) and math.isnan(c['seq_per_genome']))]
     if densities:
