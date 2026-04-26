@@ -117,7 +117,8 @@ def main():
         coverage_mode=args.cov_mode,
         weight_by=weight_by,
         bidirectional_only=args.only_bidirectional,
-        retained_fields=retained_fields
+        retained_fields=retained_fields,
+        n_workers=args.workers if args.workers and args.workers > 1 else None,
     )
 
     print(f"SSN 构建完成:")
