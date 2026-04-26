@@ -255,10 +255,11 @@ def main():
             _target_idx = _tsv_col_names.index('target') if 'target' in _tsv_col_names else 1
 
         # 如果指定了 --output-dir，准备输出目录和汇总文件
+        summary_file = None
         if args.output_dir:
             os.makedirs(args.output_dir, exist_ok=True)
             summary_path = os.path.join(args.output_dir, f"summary.tsv")
-            summary_file = open(summary_path, 'w', encoding='utf-8')  # noqa: WPS515 — closed explicitly at line 249
+            summary_file = open(summary_path, 'w', encoding='utf-8')
             pfam_header = "\tdomain_entropy\tseqs_with_hit\thit_ratio\tunique_domains\ttop_domains" if args.pfam_db else ""
             summary_file.write("cluster\tnodes\tedges\tdensity\tavg_degree\tmax_degree\tmin_degree\tavg_clustering\tgenomes\tgenome_ratio\tseq_per_genome" + pfam_header + "\n")
 
@@ -378,7 +379,7 @@ def main():
         if pfam_analyzer:
             pfam_analyzer.close()
 
-        if args.output_dir:
+        if summary_file is not None:
             summary_file.close()
             print(f"各社区序列ID及子网络已保存至目录: {args.output_dir}")
             print(f"汇总统计文件: {summary_path}")

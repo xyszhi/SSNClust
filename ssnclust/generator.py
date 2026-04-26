@@ -139,6 +139,9 @@ class SSNGenerator:
         :param chunk_size: 多进程模式下每个分块的行数（默认 200000）。
         :param extra_filters: 额外的过滤条件 (列名=阈值)，默认执行 '列值 >= 阈值'。
         """
+        # 每次调用 generate() 时重置图，防止重复调用时数据叠加
+        self.graph = ig.Graph(directed=False)
+
         nodes = set()
         edges = []
         edge_attrs = {} # 用于存储所有提取的列作为边属性
