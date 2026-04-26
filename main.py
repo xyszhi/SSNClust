@@ -2,6 +2,7 @@ import argparse
 import json
 import math
 import os
+from concurrent.futures import ProcessPoolExecutor
 from ssnclust.generator import SSNGenerator
 from ssnclust.analyzer import SSNAnalyzer, PfamDomainAnalyzer
 from ssnclust.clustering.leiden_alg import LeidenClustering
@@ -9,6 +10,56 @@ from ssnclust.clustering.spectral import SSNSpectralClustering
 from ssnclust.clustering.mcl_wrapper import MCLClustering
 from ssnclust.clustering.nmf_clust import NMFClustering
 from ssnclust.clustering.sbm_model import SBMClustering
+
+
+def _process_cluster(args):
+    """
+    子进程工作函数：对单个社区计算统计信息，并（可选）写出节点列表和 graphml 文件。
+    所有参数通过单个元组传入，以兼容 ProcessPoolExecutor.map。
+
+    参数元组字段：
+        cid          : 社区编号
+        node_names   : 该社区的节点名列表
+        edge_list    : 边列表 [(local_u_idx, local_v_idx), ...]
+        edge_attrs   : {attr_name: [values...]} 边属性字典
+        output_dir   : 输出目录路径（None 表示不写文件）
+        prefix       : 文件名前缀
+        pfam_db      : Pfam SQLite 数据库路径（None 表示不查询）
+        pfam_evalue  : Pfam 查询 E-value 阈值
+    返回：
+        (cid, stats_dict, sub_genomes, pfam_info)
+    """
+    import igraph as ig
+    from ssnclust.analyzer import SSNAnalyzer, PfamDomainAnalyzer
+
+    cid, node_names, edge_list, edge_attrs, output_dir, prefix, pfam_db, pfam_evalue = args
+
+    # 在子进程中重建子图，避免序列化大图对象
+    subgraph = ig.Graph(n=len(node_names))
+    subgraph.vs['name'] = node_names
+    if edge_list:
+        subgraph.add_edges(edge_list)
+        for attr, vals in edge_attrs.items():
+            subgraph.es[attr] = vals
+
+    sub_analyzer = SSNAnalyzer(subgraph)
+    s = sub_analyzer.basic_stats()
+    sub_genomes = len({n.split('|')[0] for n in node_names if '|' in n})
+
+    pfam_info = None
+    if pfam_db:
+        pfam_analyzer = PfamDomainAnalyzer(pfam_db, pfam_evalue)
+        pfam_info = pfam_analyzer.domain_entropy(list(node_names))
+        pfam_analyzer.close()
+
+    if output_dir:
+        sub_path = os.path.join(output_dir, f"{prefix}_{cid}.txt")
+        with open(sub_path, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(node_names) + '\n')
+        graphml_path = os.path.join(output_dir, f"{prefix}_{cid}.graphml")
+        subgraph.write(graphml_path)
+
+    return cid, s, sub_genomes, pfam_info
 
 
 def main():
@@ -44,6 +95,8 @@ def main():
     parser.add_argument("--retained-fields", default="",
                         help="要保留在边属性中的额外字段，多个字段用逗号分隔 (默认: 空，仅保留 weight 或 jaccard_weight)")
     parser.add_argument("--json", metavar="FILE", help="将网络分析数据（参数、统计信息、聚类结果）以 JSON 格式保存到指定文件")
+    parser.add_argument("--workers", type=int, default=None,
+                        help="并行处理社区时使用的进程数（默认: 自动使用 CPU 核心数，最多不超过社区数量）")
 
     args = parser.parse_args()
 
@@ -193,16 +246,33 @@ def main():
             pfam_header = "\tdomain_entropy\tseqs_with_hit\thit_ratio\tunique_domains\ttop_domains" if args.pfam_db else ""
             summary_file.write("cluster\tnodes\tedges\tdensity\tavg_degree\tmax_degree\tmin_degree\tavg_clustering\tgenomes\tgenome_ratio\tseq_per_genome" + pfam_header + "\n")
 
+        # 为每个社区准备子进程参数：提取节点名和边数据，避免序列化大图对象
+        pfam_db_path = args.pfam_db if args.pfam_db else None
+        pfam_evalue = pfam_analyzer.evalue_threshold if pfam_analyzer else 1e-5
+        cluster_args = []
         for cid in range(len(clustering)):
             subgraph = graph.induced_subgraph(clustering[cid])
-            sub_analyzer = SSNAnalyzer(subgraph)
-            s = sub_analyzer.basic_stats()
-            sub_names = subgraph.vs['name']
-            sub_genomes = len({n.split('|')[0] for n in sub_names if '|' in n})
+            node_names = list(subgraph.vs['name'])
+            edge_list = subgraph.get_edgelist()
+            edge_attrs = {attr: list(subgraph.es[attr]) for attr in subgraph.edge_attributes()}
+            cluster_args.append((
+                cid, node_names, edge_list, edge_attrs,
+                args.output_dir, args.prefix, pfam_db_path, pfam_evalue
+            ))
+
+        # 并行处理各社区（CPU 密集型，使用多进程）
+        max_workers = args.workers if args.workers and args.workers > 0 else (os.cpu_count() or 1)
+        n_workers = min(max_workers, len(cluster_args))
+        # print(f"[并行] 使用 {n_workers} 个进程处理 {len(cluster_args)} 个社区...")
+        with ProcessPoolExecutor(max_workers=n_workers) as executor:
+            parallel_results = list(executor.map(_process_cluster, cluster_args))
+
+        # 按 cid 排序，保证输出顺序与串行版本一致
+        parallel_results.sort(key=lambda x: x[0])
+
+        for cid, s, sub_genomes, pfam_info in parallel_results:
             genome_ratio = sub_genomes / total_genomes if total_genomes > 0 else 0.0
             seq_per_genome = s['nodes'] / sub_genomes if sub_genomes > 0 else float('nan')
-
-            pfam_info = pfam_analyzer.domain_entropy(list(sub_names)) if pfam_analyzer else None
 
             pfam_suffix = ""
             if pfam_info:
@@ -226,14 +296,7 @@ def main():
             print(row)
 
             if args.output_dir:
-                # 保存子网络节点名（序列ID）
-                sub_path = os.path.join(args.output_dir, f"{args.prefix}_{cid}.txt")
-                with open(sub_path, 'w', encoding='utf-8') as f:
-                    f.write('\n'.join(sub_names) + '\n')
-                # 保存子网络 graphml
-                graphml_path = os.path.join(args.output_dir, f"{args.prefix}_{cid}.graphml")
-                subgraph.write(graphml_path)
-                # 写入汇总行
+                # 写入汇总行（节点列表和 graphml 已在子进程中写出）
                 seq_per_genome_str = f"{seq_per_genome:.2f}" if sub_genomes > 0 else "nan"
                 pfam_tsv = ""
                 if pfam_info:
