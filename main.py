@@ -59,7 +59,7 @@ def _process_cluster(args):
         graphml_path = os.path.join(output_dir, f"{prefix}_{cid}.graphml")
         subgraph.write(graphml_path)
 
-    return cid, s, sub_genomes, pfam_info
+    return cid, s, sub_genomes, pfam_info, node_names
 
 
 def main():
@@ -101,6 +101,7 @@ def main():
     args = parser.parse_args()
 
     clustering = None  # 防止 clustering 变量未定义导致 NameError
+    results_by_cid = {}  # 并行处理结果缓存，供 JSON 输出复用
 
     print(f"正在从 {args.input} 生成 SSN...")
     generator = SSNGenerator(args.input)
@@ -270,7 +271,10 @@ def main():
         # 按 cid 排序，保证输出顺序与串行版本一致
         parallel_results.sort(key=lambda x: x[0])
 
-        for cid, s, sub_genomes, pfam_info in parallel_results:
+        # 构建按 cid 索引的结果字典，供后续 JSON 输出复用，避免重复计算
+        results_by_cid = {r[0]: r for r in parallel_results}
+
+        for cid, s, sub_genomes, pfam_info, _node_names in parallel_results:
             genome_ratio = sub_genomes / total_genomes if total_genomes > 0 else 0.0
             seq_per_genome = s['nodes'] / sub_genomes if sub_genomes > 0 else float('nan')
 
@@ -408,25 +412,21 @@ def main():
             ratio_metrics = analyzer.inter_cluster_edge_ratio(clustering)
             clusters_list = []
             for cid in range(len(clustering)):
-                subgraph = graph.induced_subgraph(clustering[cid])
-                sub_analyzer = SSNAnalyzer(subgraph)
-                s = sub_analyzer.basic_stats()
-                sub_names = list(subgraph.vs['name'])
-                sub_genomes = len({n.split('|')[0] for n in sub_names if '|' in n})
+                # 直接复用并行处理结果，避免重复计算统计和 Pfam 查询
+                _, s, sub_genomes, pfam_info, sub_names = results_by_cid[cid]
                 genome_ratio = sub_genomes / total_genomes if total_genomes > 0 else 0.0
                 seq_per_genome = s['nodes'] / sub_genomes if sub_genomes > 0 else None
                 pfam_json = None
-                if pfam_analyzer:
-                    pi = pfam_analyzer.domain_entropy(list(sub_names))
-                    if pi:
-                        pfam_json = {
-                            "domain_entropy": pi['domain_entropy'] if not math.isnan(pi['domain_entropy']) else None,
-                            "seqs_with_hit": pi['seqs_with_hit'],
-                            "total_seqs": pi['total_seqs'],
-                            "hit_ratio": pi['hit_ratio'],
-                            "unique_domains": pi['unique_domains'],
-                            "top_domains": [{'domain': d, 'count': c} for d, c in pi['top_domains']],
-                        }
+                if pfam_info:
+                    pi = pfam_info
+                    pfam_json = {
+                        "domain_entropy": pi['domain_entropy'] if not math.isnan(pi['domain_entropy']) else None,
+                        "seqs_with_hit": pi['seqs_with_hit'],
+                        "total_seqs": pi['total_seqs'],
+                        "hit_ratio": pi['hit_ratio'],
+                        "unique_domains": pi['unique_domains'],
+                        "top_domains": [{'domain': d, 'count': c} for d, c in pi['top_domains']],
+                    }
                 cluster_entry = {
                     "id": cid,
                     "nodes": s['nodes'],
