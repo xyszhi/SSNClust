@@ -109,6 +109,20 @@ def main():
 
     retained_fields = [f.strip() for f in args.retained_fields.split(',') if f.strip()] if args.retained_fields else []
 
+    # 图构建并行化阈值：文件行数（不含表头）>= 500_000 时才启用多进程过滤
+    _MIN_LINES_FOR_PARALLEL_GENERATE = 500_000
+    _gen_n_workers = None
+    if args.workers and args.workers > 1:
+        try:
+            with open(args.input, 'rb') as _f:
+                _line_count = sum(1 for _ in _f) - 1  # 减去表头
+            if _line_count >= _MIN_LINES_FOR_PARALLEL_GENERATE:
+                _gen_n_workers = args.workers
+            else:
+                print(f"[提示] 输入文件仅 {_line_count} 行，图构建阶段自动使用串行模式（阈值: {_MIN_LINES_FOR_PARALLEL_GENERATE} 行）")
+        except OSError:
+            pass  # 无法统计行数时回退串行
+
     graph = generator.generate(
         evalue_threshold=args.evalue,
         identity_threshold=args.identity,
@@ -118,7 +132,7 @@ def main():
         weight_by=weight_by,
         bidirectional_only=args.only_bidirectional,
         retained_fields=retained_fields,
-        n_workers=args.workers if args.workers and args.workers > 1 else None,
+        n_workers=_gen_n_workers,
     )
 
     print(f"SSN 构建完成:")
@@ -262,12 +276,19 @@ def main():
                 args.output_dir, args.prefix, pfam_db_path, pfam_evalue
             ))
 
-        # 并行处理各社区（CPU 密集型，使用多进程）
+        # 社区统计并行化阈值：社区数 >= 20 时才启用多进程
+        _MIN_CLUSTERS_FOR_PARALLEL = 20
         max_workers = args.workers if args.workers and args.workers > 0 else (os.cpu_count() or 1)
         n_workers = min(max_workers, len(cluster_args))
-        # print(f"[并行] 使用 {n_workers} 个进程处理 {len(cluster_args)} 个社区...")
-        with ProcessPoolExecutor(max_workers=n_workers) as executor:
-            parallel_results = list(executor.map(_process_cluster, cluster_args))
+        if n_workers > 1 and len(cluster_args) < _MIN_CLUSTERS_FOR_PARALLEL:
+            print(f"[提示] 社区数量仅 {len(cluster_args)} 个，社区统计阶段自动使用串行模式（阈值: {_MIN_CLUSTERS_FOR_PARALLEL} 个）")
+            parallel_results = [_process_cluster(a) for a in cluster_args]
+        elif n_workers > 1:
+            print(f"[并行] 使用 {n_workers} 个进程处理 {len(cluster_args)} 个社区...")
+            with ProcessPoolExecutor(max_workers=n_workers) as executor:
+                parallel_results = list(executor.map(_process_cluster, cluster_args))
+        else:
+            parallel_results = [_process_cluster(a) for a in cluster_args]
 
         # 按 cid 排序，保证输出顺序与串行版本一致
         parallel_results.sort(key=lambda x: x[0])
