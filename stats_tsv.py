@@ -25,7 +25,7 @@ def analyze_tsv(file_path, output_prefix=None):
     print(f"Reading {file_path}...")
     df = pd.read_csv(file_path, sep='\t')
 
-    target_cols = ['fident', 'qcov', 'tcov']
+    target_cols = ['fident', 'alnlen', 'qlen', 'tlen', 'qcov', 'tcov']
     
     # 检查列是否存在
     missing_cols = [col for col in target_cols if col not in df.columns]
@@ -38,8 +38,9 @@ def analyze_tsv(file_path, output_prefix=None):
     print("\nDescriptive Statistics:")
     print(stats)
 
-    # 计算 qcov 和 tcov 的平均值用于绘图
+    # 计算平均值用于绘图
     df['avg_cov'] = (df['qcov'] + df['tcov']) / 2
+    df['avg_len'] = (df['qlen'] + df['tlen']) / 2
 
     # 如果没有指定输出前缀，则使用文件名（不含扩展名）
     if output_prefix is None:
@@ -54,26 +55,25 @@ def analyze_tsv(file_path, output_prefix=None):
     if HAS_PLOT_LIBS:
         print("\nGenerating plots...")
         sns.set_theme(style="whitegrid")
-        # 现在只有两个图：fident 和 avg_cov，统一 y 轴
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
+        # 修改为 2x2 子图布局
+        fig, axes = plt.subplots(2, 2, figsize=(12, 10), sharey=False)
+        axes = axes.flatten() # 展平以便于循环
         
         plot_configs = [
             ('fident', 'Distribution of fident'),
-            ('avg_cov', 'Distribution of Avg Coverage (qcov & tcov)')
+            ('avg_cov', 'Distribution of Avg Coverage (qcov & tcov)'),
+            ('alnlen', 'Distribution of alnlen'),
+            ('avg_len', 'Distribution of Avg Length (qlen & tlen)')
         ]
         
-        for i, (col, _) in enumerate(plot_configs):
+        for i, (col, title) in enumerate(plot_configs):
             sns.histplot(df[col], kde=True, ax=axes[i], color='skyblue', bins=30)
-            axes[i].set_xlabel(col, fontsize=12)
-            if i == 0:
-                axes[i].set_ylabel('Frequency', fontsize=12)
-            else:
-                axes[i].set_ylabel('')
-                # 显式移除 y 轴刻度标签（因为 sharey=True 已经处理了大部分，但确保干净）
-                axes[i].tick_params(labelleft=False)
+            axes[i].set_title(title, fontsize=12)
+            axes[i].set_xlabel(col, fontsize=10)
+            axes[i].set_ylabel('Frequency', fontsize=10)
             
             # 统一设置刻度字号
-            axes[i].tick_params(axis='both', which='major', labelsize=10)
+            axes[i].tick_params(axis='both', which='major', labelsize=9)
 
         # 设置整个图的 title 为文件名（去掉扩展名，并加粗）
         base_name = os.path.splitext(os.path.basename(file_path))[0]
