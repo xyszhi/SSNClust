@@ -26,9 +26,9 @@ def main():
 
     # 网络构建参数（与 main.py 保持一致，便于复现聚类时的建网条件）
     parser.add_argument("--evalue", type=float, default=1e-5, help="E-value 阈值 (默认: 1e-5)")
-    parser.add_argument("--identity", type=float, default=0.0, help="Identity 阈值 (0.0-1.0, 默认: 0.0)")
-    parser.add_argument("--alnlen", type=int, default=0, help="比对长度阈值 (默认: 0)")
-    parser.add_argument("--coverage", type=float, default=0.0, help="Coverage 阈值 (0.0-1.0, 默认: 0.0)")
+    parser.add_argument("--identity", type=float, default=0.3, help="Identity 阈值 (0.0-1.0, 默认: 0.3)")
+    parser.add_argument("--alnlen", type=int, default=50, help="比对长度阈值 (默认: 50)")
+    parser.add_argument("--coverage", type=float, default=0.5, help="Coverage 阈值 (0.0-1.0, 默认: 0.5)")
     parser.add_argument("--cov-mode", choices=['min', 'max', 'any'], default='min',
                         help="Coverage 过滤模式 (默认: min)")
     parser.add_argument("--weight", choices=['fident', 'bits', 'fident_cov', 'fident_cov_harmonic', 'none'],
