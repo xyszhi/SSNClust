@@ -216,14 +216,36 @@ python /path/to/SSNClust/main.py \
 sbatch run_ssnclust.sh
 ```
 
-## 6. 技术路线与建议
+## 6. 直系同源精修 (Ortholog Refinement)
+
+对于经 `main.py` 聚类后得到的子网络，若簇内某些基因组贡献了多条序列（旁系同源/近期重复，`seq_per_genome` > 1），可使用独立脚本 `ortholog_refine.py` 对该 cluster 的 TSV 文件重新建网并精修，输出满足"每个基因组恰好一条序列"原则的直系同源子簇。
+
+**核心算法**：
+1. 构建"基因组级精简图"：每对存在边连接的基因组之间只保留权重最高的一条边 (Best Reciprocal Edge)。
+2. 在精简图上按加权度从高到低贪心选择每个基因组的代表序列；对基因组数较少的簇可选执行局部交换搜索进一步优化。
+3. 用代表序列集合在原图上做连通性检验，按连通分量拆分为最终子簇。
+4. 未被选中的序列作为"额外旁系同源"单独输出，不丢弃。
+
+**使用示例**：
+```bash
+python ortholog_refine.py cluster_12.tsv \
+    --weight fident_cov --cov-mode any \
+    -d ortholog_out --prefix cluster_12
+```
+
+**输出说明**（位于 `--output-dir` 指定目录下）：
+- `<prefix>_<id>.txt` / `.graphml` / `.tsv`：每个精修子簇的序列 ID 列表、子网络、原始比对记录
+- `<prefix>_extra_paralogs.tsv`：落选的额外旁系同源序列及原因
+- `<prefix>_summary.tsv`：各精修子簇的节点数、边数、基因组数、低置信度基因组列表
+
+## 7. 技术路线与建议
 
 1.  **性能优化**: Jaccard 加权使用 scipy 稀疏矩阵向量化实现，在 500 万条边的网络上相比纯 Python 循环提速约 4 倍。对于千万级别的边，建议使用 `graph-tool` 处理 SBM，因为它具有高效的 C++ 后端。
 2.  **权重选择**: `fident_cov`（identity × coverage）综合考虑了比对质量和覆盖度，通常是 SSN 分析的推荐权重；`fident_cov_harmonic` 对低覆盖度的比对惩罚更强。
 3.  **Jaccard 加权**: `--jaccard` 参数通过节点邻居重叠度校正边权重，能有效降低高度数枢纽节点对聚类的干扰，推荐在大型网络中使用。
 4.  **可视化**: 导出为 `.graphml` 格式，推荐在 Cytoscape 或 Gephi 中进行后期可视化。
 
-## 7. 依赖
+## 8. 依赖
 
 | 包 | 用途 |
 |----|------|
@@ -235,7 +257,7 @@ sbatch run_ssnclust.sh
 | `scikit-network` | SBM 回退实现（Potts 模型） |
 | `graph-tool` *(可选)* | SBM 贝叶斯推断（高性能，需单独安装） |
 
-## 8. 开发进度
+## 9. 开发进度
 
 - [x] 实现基础 `SSNGenerator` 类，支持多种比对格式解析、双向过滤、多种权重计算。
 - [x] 实现 `SSNAnalyzer` 类，支持网络特征描述（聚集系数、连通分量、最大流/最小切割、模块度、跨 cluster 边比例等）。
@@ -244,5 +266,6 @@ sbatch run_ssnclust.sh
 - [x] 深度集成 `graph-tool` SBM 推断（自动回退至 scikit-network）。
 - [x] 集成 Pfam 结构域分析（基于 hmmscan SQLite 数据库），计算每个 cluster 的结构域信息熵。
 - [x] 开发统一的 CLI 接口，支持聚类结果输出（序列 ID 列表、子网络 graphml、汇总 TSV）。
+- [x] 实现直系同源精修独立程序 `ortholog_refine.py`（基因组级精简图 + 贪心/局部交换搜索选取单拷贝代表序列）。
 - [ ] 增加可视化绘图模块 (基于 matplotlib/plotly)。
 - [ ] 支持更多序列比对工具的直接调用封装。
