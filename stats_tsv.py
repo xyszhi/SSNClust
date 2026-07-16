@@ -25,6 +25,15 @@ def analyze_tsv(file_path, output_prefix=None):
     print(f"Reading {file_path}...")
     df = pd.read_csv(file_path, sep='\t')
 
+    # 排除自比对的行（第一列 query 等于第二列 target）
+    if df.shape[1] >= 2:
+        query_col, target_col = df.columns[0], df.columns[1]
+        before_rows = len(df)
+        df = df[df[query_col] != df[target_col]].copy()
+        removed_rows = before_rows - len(df)
+        if removed_rows > 0:
+            print(f"Excluded {removed_rows} self-alignment rows (where {query_col} == {target_col}).")
+
     target_cols = ['fident', 'alnlen', 'qlen', 'tlen', 'qcov', 'tcov']
     
     # 检查列是否存在
